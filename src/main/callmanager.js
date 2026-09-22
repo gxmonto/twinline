@@ -24,11 +24,21 @@ const log = require('./log').child('calls');
 const MAX_HISTORY = 300;
 
 class CallManager extends EventEmitter {
-  constructor({ audio, maxCalls = 4, contacts = null }) {
+  constructor({ audio, maxCalls = 4, contacts = null, transcription = null }) {
     super();
     this.audio = audio;
     this.maxCalls = maxCalls;
     this.contacts = contacts;                 // optional ContactStore for name lookup
+    this.transcription = transcription;       // optional TranscriptionService
+    if (transcription) {
+      transcription.on('finished', (t) => {
+        // Attach the saved transcript to the matching history entry.
+        const entry = this.history.find((h) => h.id === t.callId);
+        if (entry) { entry.transcript = t.file; entry.transcriptLines = t.lines.length; this.emit('history', this.history.slice(0, 50)); }
+        this._emitCalls();
+      });
+      transcription.on('started', () => this._emitCalls());
+    }
     /** @type {Map<string, UserAgent>} */
     this.accounts = new Map();
     /** @type {Map<string, import('./sip/call').Call>} */
@@ -140,6 +150,9 @@ class CallManager extends EventEmitter {
     call.on('state', (state) => {
       this.emit('callState', { callId: call.id, state });
       if (state === 'incoming') this.emit('incoming', this._describe(call));
+      if (state === 'connected' && this.transcription && this.transcription.settings.autoStart) {
+        this.startTranscription(call.id).catch((err) => this.emit('warning', { callId: call.id, message: err.message }));
+      }
     });
     call.on('dtmf', (digit) => this.emit('dtmf', { callId: call.id, digit }));
     call.on('warning', (message) => this.emit('warning', { callId: call.id, message }));
@@ -148,6 +161,9 @@ class CallManager extends EventEmitter {
       this._recordHistory(call, info);
       this.calls.delete(call.id);
       this._onMemberGone(call.id);
+      if (this.transcription && this.transcription.isActive(call.id)) {
+        this.transcription.stop(call.id, { reason: 'call ended' }).catch((err) => log.error('transcript stop failed', err));
+      }
       this._emitCalls();
       this.emit('callEnded', { callId: call.id, remoteNumber: call.remoteNumber, ...info });
     });
@@ -188,7 +204,33 @@ class CallManager extends EventEmitter {
       inConference: this.conferenceIds.has(call.id),
       contactName: this._contactName(call.remoteNumber),
       audible: this.audio.mixer.getLegMode(call.id) !== 'idle',
+      transcribing: !!(this.transcription && this.transcription.isActive(call.id)),
     };
+  }
+
+  // ---- transcription ------------------------------------------------------
+
+  async startTranscription(callId) {
+    if (!this.transcription) throw new Error('transcription is not available');
+    const call = this.call(callId);
+    if (call.state !== 'connected') throw new Error('the call must be connected first');
+    await this.transcription.start({
+      callId: call.id,
+      accountId: call.accountId,
+      remoteNumber: call.remoteNumber,
+      remoteName: call.remoteDisplayName,
+      contactName: this._contactName(call.remoteNumber),
+      answeredAt: call.answeredAt,
+    });
+    this._emitCalls();
+    return this._describe(call);
+  }
+
+  async stopTranscription(callId) {
+    if (!this.transcription) throw new Error('transcription is not available');
+    const result = await this.transcription.stop(callId, { reason: 'stopped by user' });
+    this._emitCalls();
+    return result;
   }
 
   call(callId) {
@@ -481,6 +523,7 @@ class CallManager extends EventEmitter {
       conferenceRunning: this.conferenceRunning,
       muted: this.muted,
       accounts: [...this.accounts.values()].map((ua) => ua.status()),
+      transcription: this.transcription ? this.transcription.status() : null,
     };
   }
 
@@ -495,6 +538,7 @@ class CallManager extends EventEmitter {
 
   async shutdown() {
     await this.hangupAll().catch(() => {});
+    if (this.transcription) await this.transcription.shutdown().catch(() => {});
     for (const ua of this.accounts.values()) await ua.stop().catch(() => {});
     this.accounts.clear();
     this.audio.closeAll();

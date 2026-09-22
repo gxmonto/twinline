@@ -120,6 +120,23 @@ function wireEvents() {
   // Chromium knows when connectivity comes back; the SIP stack does not.
   window.addEventListener('online', () => guard(api.network.refresh('browser online event')));
 
+  // Transcription
+  api.on.transcriptStarted(onTranscriptStarted);
+  api.on.transcriptLine(onTranscriptLine);
+  api.on.transcriptSpeaking(onTranscriptSpeaking);
+  api.on.transcriptFinished(onTranscriptFinished);
+  api.on.transcriptStatus(() => { if (!$('settingsOverlay').classList.contains('hidden')) renderSettingsTranscription(); });
+  api.on.modelsProgress(onModelProgress);
+  api.on.modelsStatus(() => renderSettingsTranscription());
+  $('btnTranscriptClose').onclick = () => { shownTranscript = null; renderTranscript(); };
+  $('btnTranscriptCopy').onclick = () => copyTranscript(shownTranscript && transcripts.get(shownTranscript));
+  $('btnTranscriptViewClose').onclick = () => $('transcriptOverlay').classList.add('hidden');
+  $('btnTranscriptViewCopy').onclick = () => viewedTranscript && copyText(viewedTranscript.text);
+  $('btnTranscriptViewFolder').onclick = () => guard(api.transcribe.openFolder());
+  $('btnTranscriptViewDelete').onclick = deleteViewedTranscript;
+  $('btnTranscriptsFolder').onclick = () => guard(api.transcribe.openFolder());
+  $('trModel').addEventListener('change', renderModelRows);
+
   // Updates
   api.on.update(renderUpdate);
   api.updates.status().then(renderUpdate).catch(() => {});
@@ -173,7 +190,7 @@ function onGlobalKey(e) {
     return;
   }
   if (e.key === 'Escape') {
-    for (const id of ['settingsOverlay', 'historyOverlay', 'transferOverlay', 'contactsOverlay']) {
+    for (const id of ['settingsOverlay', 'historyOverlay', 'transferOverlay', 'contactsOverlay', 'transcriptOverlay']) {
       $(id).classList.add('hidden');
     }
     return;
@@ -251,6 +268,7 @@ function renderCalls() {
       </div>
       <div class="call-meta">
         ${statusTag(call)}
+        ${call.transcribing ? '<span class="tag red rec">Transcribing</span>' : ''}
         <span>${esc(account ? account.label : call.accountId)}</span>
         <span data-duration="${esc(call.id)}">${formatDuration(call)}</span>
         ${call.codec ? `<span>${esc(call.codec)}</span>` : ''}
@@ -306,8 +324,19 @@ function callButtons(call, connectedCount, conferenceRunning) {
   else if (connectedCount >= 2) parts.push(b('conference', 'Conference', 'btn small'));
 
   parts.push(b('transfer', 'Transfer', 'btn ghost small'));
+  parts.push(transcribeButton(call));
   parts.push(b('hangup', 'End', 'btn danger small'));
   return parts.join('');
+}
+
+function transcribeButton(call) {
+  const id = esc(call.id);
+  if (call.transcribing) {
+    return `<button class="btn small active" data-action="transcribeStop" data-call="${id}" title="Stop transcribing; the transcript so far is saved">Stop transcript</button>`;
+  }
+  const available = state.transcription && state.transcription.available;
+  const title = available ? 'Transcribe this call on this computer' : 'Download a speech model in Settings → Transcription first';
+  return `<button class="btn ghost small" data-action="transcribe" data-call="${id}" ${available ? '' : 'disabled'} title="${title}">Transcribe</button>`;
 }
 
 function renderConference() {
@@ -401,6 +430,8 @@ function onCallAction(action, callId) {
     case 'confHold': return guard(api.conference.holdParty(callId));
     case 'confResume': return guard(api.conference.resumeParty(callId));
     case 'transfer': return openTransfer(callId);
+    case 'transcribe': return guard(api.transcribe.start(callId));
+    case 'transcribeStop': return guard(api.transcribe.stop(callId));
     default: return null;
   }
 }
@@ -505,6 +536,7 @@ async function openHistory() {
           <span class="dir ${cls}">${arrow}</span>
           <span class="who">${esc(h.contactName || h.remoteName || h.remoteNumber || 'Unknown')}</span>
           <span class="when">${new Date(h.startedAt).toLocaleString()}${duration}</span>
+          ${h.transcript ? `<button class="btn ghost small" data-tfile="${esc(h.transcript)}" title="${h.transcriptLines} lines">Transcript</button>` : ''}
           <button class="btn ghost small redial" data-redial="${esc(h.remoteNumber)}">Call</button>
         </li>`;
       }).join('')
@@ -517,6 +549,10 @@ async function openHistory() {
       dial();
     };
   }
+  for (const button of $('historyList').querySelectorAll('button[data-tfile]')) {
+    button.onclick = () => openTranscriptFile(button.dataset.tfile);
+  }
+  renderSavedTranscripts();
   $('historyOverlay').classList.remove('hidden');
 }
 
@@ -526,6 +562,7 @@ function openSettings() {
   renderSettingsAccounts();
   renderSettingsAudio();
   renderSettingsGeneral();
+  renderSettingsTranscription();
   $('settingsOverlay').classList.remove('hidden');
 }
 
@@ -706,6 +743,13 @@ async function saveSettings() {
   next.behaviour.incomingPopup = $('incomingPopup').checked;
   next.behaviour.sipTrace = $('sipTrace').checked;
   next.updates = { mode: $('updateMode').value, url: $('updateUrl').value.trim() };
+  next.transcription = {
+    model: $('trModel').value || 'small',
+    language: $('trLanguage').value,
+    autoStart: $('trAutoStart').checked,
+    consentTone: $('trConsentTone').checked,
+    threads: Math.max(1, Math.min(16, Number($('trThreads').value) || 4)),
+  };
 
   const saved = await guard(api.settings.save(next));
   if (!saved) return;
@@ -720,6 +764,190 @@ async function saveSettings() {
 
   closeSettings();
   toast('Settings saved');
+}
+
+// ---- transcription ----------------------------------------------------------
+
+/** Live and recently finished transcripts, by call id. */
+const transcripts = new Map();
+let shownTranscript = null;          // call id shown in the panel
+let viewedTranscript = null;         // saved transcript open in the viewer
+let modelsStatus = null;
+
+function onTranscriptStarted(record) {
+  transcripts.set(record.callId, { ...record, lines: record.lines || [] });
+  shownTranscript = record.callId;
+  renderTranscript();
+}
+
+function onTranscriptLine({ callId, line }) {
+  const record = transcripts.get(callId);
+  if (!record) return;
+  record.lines.push(line);
+  if (shownTranscript === callId) renderTranscript();
+}
+
+function onTranscriptSpeaking({ callId, speaker, speaking }) {
+  const record = transcripts.get(callId);
+  if (!record) return;
+  record.speaking = { ...(record.speaking || {}), [speaker]: speaking };
+  if (shownTranscript === callId) renderSpeaking(record);
+}
+
+function onTranscriptFinished(record) {
+  const existing = transcripts.get(record.callId) || {};
+  transcripts.set(record.callId, { ...existing, ...record, finished: true });
+  if (shownTranscript === record.callId) renderTranscript();
+  if (record.lines && record.lines.length) toast(`Transcript saved (${record.lines.length} lines)`);
+}
+
+function renderTranscript() {
+  const panel = $('transcriptPanel');
+  const record = shownTranscript ? transcripts.get(shownTranscript) : null;
+  if (!record) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  $('transcriptWho').textContent = record.remoteName || record.remoteNumber || '';
+  const list = $('transcriptLines');
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+
+  list.innerHTML = record.lines.length
+    ? record.lines.map((l) => `<li>
+        <span class="t">${stamp(l.atMs)}</span>
+        <span class="s ${l.speaker}">${l.speaker === 'you' ? 'You' : 'Caller'}</span>
+        <span class="x">${esc(l.text)}${l.lang && l.lang !== 'en' ? `<small>${esc(l.lang)}</small>` : ''}</span>
+      </li>`).join('')
+    : `<li class="empty-line">${record.finished ? 'Nothing was said.' : 'Listening… lines appear when a speaker pauses.'}</li>`;
+  if (atBottom) list.scrollTop = list.scrollHeight;
+
+  $('transcriptFoot').textContent = record.finished
+    ? (record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}` : 'Finished; nothing to save.')
+    : 'Recognition runs on this computer. Both parties heard a tone when it started.'.replace(' Both parties heard a tone when it started.', settings.transcription && settings.transcription.consentTone ? ' Both parties heard a tone when it started.' : '');
+  renderSpeaking(record);
+}
+
+function renderSpeaking(record) {
+  const s = record.speaking || {};
+  $('speakYou').classList.toggle('on', !!s.you && !record.finished);
+  $('speakCaller').classList.toggle('on', !!s.caller && !record.finished);
+}
+
+function stamp(ms) {
+  const s = Math.floor((ms || 0) / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function transcriptToText(record) {
+  return record.lines.map((l) => `[${stamp(l.atMs)}] ${l.speaker === 'you' ? 'You' : 'Caller'}: ${l.text}`).join('\n');
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copied'); } catch (err) { toast(`Copy failed: ${err.message}`, 'error'); }
+}
+
+function copyTranscript(record) {
+  if (record) copyText(transcriptToText(record));
+}
+
+async function openTranscriptFile(file) {
+  const record = await guard(api.transcribe.read(file));
+  if (!record) return;
+  viewedTranscript = record;
+  $('transcriptViewTitle').textContent = `Transcript — ${record.remoteName || record.remoteNumber || 'unknown'}`;
+  $('transcriptViewText').textContent = record.text;
+  $('transcriptOverlay').classList.remove('hidden');
+}
+
+async function deleteViewedTranscript() {
+  if (!viewedTranscript) return;
+  if (!window.confirm('Delete this transcript? This cannot be undone.')) return;
+  await guard(api.transcribe.remove(viewedTranscript.file));
+  $('transcriptOverlay').classList.add('hidden');
+  viewedTranscript = null;
+  if (!$('historyOverlay').classList.contains('hidden')) openHistory();
+}
+
+async function renderSavedTranscripts() {
+  const list = await guard(api.transcribe.list()) || [];
+  $('transcriptList').innerHTML = list.length
+    ? list.map((t) => `<li>
+        <span class="dir">&#9998;</span>
+        <span class="who">${esc(t.remoteName || t.remoteNumber || 'Unknown')} <small style="color:var(--text-dim)">· ${t.lines} lines</small></span>
+        <span class="when">${new Date(t.startedAt).toLocaleString()}</span>
+        <button class="btn ghost small" data-tfile="${esc(t.file)}">Open</button>
+      </li>`).join('')
+    : '<li><span class="who" style="color:var(--text-dim)">No transcripts yet. Press <b>Transcribe</b> on a connected call.</span></li>';
+  for (const b of $('transcriptList').querySelectorAll('button[data-tfile]')) {
+    b.onclick = () => openTranscriptFile(b.dataset.tfile);
+  }
+}
+
+// -- settings tab
+
+async function renderSettingsTranscription() {
+  const t = settings.transcription || {};
+  modelsStatus = await guard(api.models.status());
+  const status = await guard(api.transcribe.status());
+
+  const select = $('trModel');
+  const current = select.value || t.model || 'small';
+  select.innerHTML = (modelsStatus ? modelsStatus.models : []).map((m) =>
+    `<option value="${esc(m.id)}">${esc(m.label)} — ~${m.approxMB} MB${m.installed ? ' ✓' : ''}</option>`).join('');
+  select.value = current;
+  $('trLanguage').value = t.language || 'auto';
+  $('trAutoStart').checked = !!t.autoStart;
+  $('trConsentTone').checked = t.consentTone !== false;
+  $('trThreads').value = t.threads || 4;
+  renderModelRows();
+
+  if (status) {
+    $('trStatus').textContent = {
+      off: status.available ? 'Ready. The engine starts when a transcript is requested.' : 'Download a speech model above to enable transcription.',
+      starting: 'Speech engine starting…',
+      ready: `Speech engine running${status.active.length ? ` — transcribing ${status.active.length} call(s)` : ''}.`,
+      error: `Speech engine error: ${status.error}`,
+    }[status.state] || '';
+    $('trStatus').classList.toggle('warn', status.state === 'error');
+  }
+}
+
+function renderModelRows() {
+  if (!modelsStatus) return;
+  const chosen = $('trModel').value;
+  const rows = modelsStatus.models.filter((m) => m.id === chosen || m.installed || m.downloading);
+  $('trModelRows').innerHTML = rows.map((m) => {
+    const p = m.progress;
+    const action = m.downloading
+      ? `<span class="bar"><span style="width:${p ? p.percent : 0}%"></span></span>
+         <span style="color:var(--text-dim)">${p && p.total ? `${Math.round(p.received / 1e6)} / ${Math.round(p.total / 1e6)} MB` : '…'}</span>
+         <button class="btn ghost small" data-mcancel="${esc(m.id)}">Cancel</button>`
+      : m.installed
+        ? `<span class="tag green">Installed · ${m.sizeOnDiskMB} MB</span>
+           <button class="btn ghost small" data-mremove="${esc(m.id)}" title="Delete the model files">Remove</button>`
+        : `<button class="btn primary small" data-mdownload="${esc(m.id)}">Download ~${m.approxMB} MB</button>`;
+    return `<div class="model-row" data-model="${esc(m.id)}">
+      <span class="name">whisper-${esc(m.id)}<small>${esc(m.label)}</small></span>${action}
+    </div>`;
+  }).join('') + (modelsStatus.vadInstalled || modelsStatus.vadDownloading ? '' :
+    '<p class="hint">The 1 MB voice-activity detector is fetched together with the model.</p>');
+
+  const root = $('trModelRows');
+  for (const b of root.querySelectorAll('[data-mdownload]')) b.onclick = () => { guard(api.models.download(b.dataset.mdownload)); renderSettingsTranscription(); };
+  for (const b of root.querySelectorAll('[data-mcancel]')) b.onclick = () => guard(api.models.cancel(b.dataset.mcancel)).then(renderSettingsTranscription);
+  for (const b of root.querySelectorAll('[data-mremove]')) b.onclick = () => {
+    if (window.confirm(`Remove the whisper-${b.dataset.mremove} model files?`)) guard(api.models.remove(b.dataset.mremove)).then(renderSettingsTranscription);
+  };
+}
+
+function onModelProgress(p) {
+  if ($('settingsOverlay').classList.contains('hidden')) return;
+  if (p.done) { renderSettingsTranscription(); return; }
+  const row = document.querySelector(`.model-row[data-model="${CSS.escape(p.id)}"]`);
+  if (!row) { renderSettingsTranscription(); return; }
+  const bar = row.querySelector('.bar span');
+  const label = row.querySelector('.bar + span');
+  if (bar) bar.style.width = `${p.percent || 0}%`;
+  if (label && p.total) label.textContent = `${Math.round(p.received / 1e6)} / ${Math.round(p.total / 1e6)} MB`;
 }
 
 // ---- updates ----------------------------------------------------------------

@@ -68,6 +68,13 @@ const DEFAULT_SETTINGS = {
     mode: 'ask',           // ask | auto | off
     url: '',               // empty = the server baked in at build time
   },
+  transcription: {
+    model: 'small',        // base | small | medium (Whisper, int8)
+    language: 'auto',      // auto | en | es | ...
+    autoStart: false,      // transcribe every call without asking
+    consentTone: true,     // beep to both parties when transcription starts
+    threads: 4,
+  },
 };
 
 class SettingsStore {

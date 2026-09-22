@@ -35,6 +35,23 @@ class AudioMixer {
     this._speaker = new Int32Array(frameSamples);
     this._legOut = new Int32Array(frameSamples);
     this._scratch = new Int16Array(frameSamples);
+
+    // What the last tick heard, for taps such as transcription.
+    this.lastMic = null;
+    /** @type {Map<string, Int16Array>} audible legs' inbound frames */
+    this.lastInbound = new Map();
+    /** @type {Map<string, {samples: Int16Array, offset: number}>} tones queued per leg */
+    this.tones = new Map();
+  }
+
+  /**
+   * Play a tone into one leg's outbound audio (and the local speaker) over
+   * the coming ticks — used for the "this call is being transcribed" beep.
+   */
+  queueTone(legId, samples) {
+    if (!this.legs.has(legId)) return false;
+    this.tones.set(legId, { samples, offset: 0 });
+    return true;
   }
 
   addLeg(id, session, mode = 'idle') {
@@ -43,6 +60,8 @@ class AudioMixer {
 
   removeLeg(id) {
     this.legs.delete(id);
+    this.tones.delete(id);
+    this.lastInbound.delete(id);
   }
 
   hasLeg(id) {
@@ -101,6 +120,10 @@ class AudioMixer {
       inbound.push({ id, leg, frame });
     }
 
+    this.lastMic = mic === this._silence ? null : mic;
+    this.lastInbound.clear();
+    for (const { id, frame } of inbound) if (frame) this.lastInbound.set(id, frame);
+
     // 2. Speaker = everything the local user should hear.
     const speaker = this._speaker.fill(0);
     for (const { leg, frame } of inbound) {
@@ -115,6 +138,17 @@ class AudioMixer {
 
       // The local user is on every audible leg.
       for (let i = 0; i < n; i++) out[i] = mic[i] * this.micGain;
+
+      // A queued tone goes to that leg and to the local speaker, so both
+      // sides hear the same announcement.
+      const tone = this.tones.get(id);
+      if (tone) {
+        for (let i = 0; i < n && tone.offset < tone.samples.length; i++, tone.offset++) {
+          out[i] += tone.samples[tone.offset];
+          speaker[i] += tone.samples[tone.offset];
+        }
+        if (tone.offset >= tone.samples.length) this.tones.delete(id);
+      }
 
       // Conference members additionally hear the other members.
       if (leg.mode === 'conference') {
