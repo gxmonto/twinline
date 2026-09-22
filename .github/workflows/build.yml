@@ -1,0 +1,44 @@
+# Continuous integration: every push and pull request runs the test suite and
+# boots the real app headlessly. Installers are only produced by release.yml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      # The smoke test boots a real Electron window, so it needs a display.
+      - run: xvfb-run --auto-servernum npm run smoke
+
+  build-check:
+    # Prove the packaging still works on both platforms without publishing.
+    needs: test
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-packages
+          path: |
+            dist/*/*.exe
+            dist/*/*.deb
+            dist/*/*.rpm
+            dist/*/*.AppImage
+          retention-days: 7
