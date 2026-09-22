@@ -18,7 +18,8 @@ jobs:
       - run: npm ci
       - run: npm test
       # The smoke test boots a real Electron window, so it needs a display.
-      - run: xvfb-run --auto-servernum npm run smoke
+      # --no-sandbox: the SUID sandbox helper cannot be made setuid on a hosted runner.
+      - run: xvfb-run --auto-servernum npx electron . --smoke --no-sandbox
 
   build-check:
     # Prove the packaging still works on both platforms without publishing.
