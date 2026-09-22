@@ -1,0 +1,73 @@
+# Builds and publishes a release whenever a version tag is pushed.
+#
+#   npm run release -- patch      (or minor / major)  → bumps, commits, tags, pushes
+#
+# electron-builder uploads each platform's installers plus latest.yml /
+# latest-linux.yml to a *draft* GitHub Release. Only once both platforms have
+# finished is the release published, so installed copies never see a
+# half-uploaded version. The app's updater then finds it automatically.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Build and upload Windows installers
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing, once you have a certificate: add these two repository
+          # secrets and electron-builder signs both exes automatically.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+  linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Build and upload Linux packages
+        run: npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          # electron-builder titles the draft with the version; find it by tag.
+          gh release view "$TAG" --json isDraft,assets --jq '.assets[].name'
+          gh release edit "$TAG" --draft=false --latest --notes-file release-notes.md --title "TwinLine ${TAG#v}"
+          echo "Published $TAG with assets:"
+          gh release view "$TAG" --json assets --jq '.assets[].name'

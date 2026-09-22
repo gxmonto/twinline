@@ -1,0 +1,149 @@
+{
+  "name": "twinline",
+  "productName": "TwinLine",
+  "version": "1.0.4",
+  "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
+  "main": "src/main/main.js",
+  "author": {
+    "name": "TwinLine",
+    "email": "support@twinline.local"
+  },
+  "license": "MIT",
+  "//publish": "build.publish uses GitHub Releases of the repo in \"repository\". Installed copies check its latest release for updates; users can override the URL in Settings.",
+  "homepage": "https://github.com/gxmonto/twinline",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:win:noedit": "electron-builder --win -c.win.signAndEditExecutable=false",
+    "dist:linux": "electron-builder --linux",
+    "dist:linux:docker": "bash tools/build-linux.sh",
+    "pack": "electron-builder --dir",
+    "smoke": "electron . --smoke",
+    "icon": "node tools/make-icon.js",
+    "release:win": "electron-builder --win --publish always",
+    "release:linux": "electron-builder --linux --publish always",
+    "release": "node tools/release.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.twinline.softphone",
+    "productName": "TwinLine",
+    "copyright": "Copyright (c) 2026 TwinLine",
+    "directories": {
+      "output": "dist/${version}",
+      "buildResources": "build"
+    },
+    "publish": {
+      "provider": "github"
+    },
+    "releaseInfo": {
+      "releaseNotesFile": "release-notes.md"
+    },
+    "files": [
+      "src/**/*",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "TwinLine"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Network;Telephony",
+      "icon": "build/icon.png",
+      "maintainer": "TwinLine <support@twinline.local>",
+      "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
+      "desktop": {
+        "Name": "TwinLine",
+        "GenericName": "Softphone",
+        "Comment": "Dual-line SIP softphone",
+        "Categories": "Network;Telephony;",
+        "Keywords": "sip;voip;softphone;telephone;pbx;",
+        "MimeType": "x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;"
+      }
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libasound2 | libasound2t64"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "libXtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "alsa-lib"
+      ],
+      "fpm": [
+        "--rpm-rpmbuild-define",
+        "_build_id_links none"
+      ]
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gxmonto/twinline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gxmonto/twinline/issues"
+  }
+}

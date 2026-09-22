@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self';">
+  <title>TwinLine</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="name">TwinLine</span>
+    </div>
+    <div class="lines" id="lineStatus"></div>
+    <div class="titlebar-actions">
+      <button class="icon-btn" id="btnContacts" title="Contacts" aria-label="Contacts">&#9823;</button>
+      <button class="icon-btn" id="btnHistory" title="Call history" aria-label="Call history">&#9201;</button>
+      <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">&#9881;</button>
+      <button class="icon-btn" id="btnMinimise" title="Minimise" aria-label="Minimise">&#8211;</button>
+      <button class="icon-btn danger" id="btnClose" title="Close" aria-label="Close">&#10005;</button>
+    </div>
+  </header>
+
+  <div id="updateBanner" class="update-banner hidden" role="status"></div>
+
+  <main id="main">
+    <section id="callArea" class="call-area">
+      <div class="empty" id="emptyState">
+        <p class="empty-title">No active calls</p>
+        <p class="empty-sub">Dial a number below, or wait for a call.</p>
+      </div>
+    </section>
+
+    <section id="conferencePanel" class="conference hidden">
+      <div class="conference-head">
+        <h2>Conference <span id="confCount" class="pill"></span></h2>
+        <div class="conference-actions">
+          <button class="btn ghost" id="btnConfSplit" title="Leave everyone connected but stop bridging">Split</button>
+          <button class="btn danger" id="btnConfEnd">End all</button>
+        </div>
+      </div>
+      <ul class="conference-members" id="confMembers"></ul>
+    </section>
+  </main>
+
+  <section class="dialer">
+    <div class="dial-row">
+      <select id="dialAccount" class="account-select" aria-label="Outgoing line"></select>
+      <input id="dialInput" class="dial-input" type="text" inputmode="tel"
+             placeholder="Number or sip:user@host" autocomplete="off" spellcheck="false">
+      <button class="btn call" id="btnDial" title="Call (Enter)">Call</button>
+    </div>
+
+    <div class="keypad" id="keypad">
+      <button data-digit="1">1<small></small></button>
+      <button data-digit="2">2<small>ABC</small></button>
+      <button data-digit="3">3<small>DEF</small></button>
+      <button data-digit="4">4<small>GHI</small></button>
+      <button data-digit="5">5<small>JKL</small></button>
+      <button data-digit="6">6<small>MNO</small></button>
+      <button data-digit="7">7<small>PQRS</small></button>
+      <button data-digit="8">8<small>TUV</small></button>
+      <button data-digit="9">9<small>WXYZ</small></button>
+      <button data-digit="*">*<small></small></button>
+      <button data-digit="0">0<small>+</small></button>
+      <button data-digit="#">#<small></small></button>
+    </div>
+
+    <div class="dial-tools">
+      <button class="btn ghost small" id="btnMute">Mute</button>
+      <button class="btn ghost small" id="btnKeypad">Hide keypad</button>
+      <div class="meter" title="Microphone level"><div class="meter-fill" id="micMeter"></div></div>
+    </div>
+  </section>
+
+  <div class="toast-stack" id="toasts" aria-live="polite"></div>
+
+  <!-- Settings -->
+  <div class="overlay hidden" id="settingsOverlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="btnSettingsClose" aria-label="Close settings">&#10005;</button>
+      </div>
+      <div class="sheet-body">
+        <nav class="tabs" id="settingsTabs">
+          <button class="tab active" data-tab="line1">Line 1</button>
+          <button class="tab" data-tab="line2">Line 2</button>
+          <button class="tab" data-tab="audio">Audio</button>
+          <button class="tab" data-tab="general">General</button>
+        </nav>
+
+        <div class="tab-panel active" data-panel="line1"></div>
+        <div class="tab-panel" data-panel="line2"></div>
+
+        <div class="tab-panel" data-panel="audio">
+          <label class="field">
+            <span>Microphone</span>
+            <select id="audioInput"></select>
+          </label>
+          <label class="field">
+            <span>Speaker</span>
+            <select id="audioOutput"></select>
+          </label>
+          <label class="field">
+            <span>Ringtone device</span>
+            <select id="audioRing"></select>
+          </label>
+          <label class="field range">
+            <span>Microphone gain <em id="micGainValue"></em></span>
+            <input type="range" id="micGain" min="0" max="2" step="0.05">
+          </label>
+          <label class="field range">
+            <span>Speaker volume <em id="speakerGainValue"></em></span>
+            <input type="range" id="speakerGain" min="0" max="2" step="0.05">
+          </label>
+          <label class="field range">
+            <span>Ring volume <em id="ringVolumeValue"></em></span>
+            <input type="range" id="ringVolume" min="0" max="1" step="0.05">
+          </label>
+          <label class="check"><input type="checkbox" id="echoCancellation"> Echo cancellation</label>
+          <label class="check"><input type="checkbox" id="noiseSuppression"> Noise suppression</label>
+          <label class="check"><input type="checkbox" id="autoGainControl"> Automatic gain control</label>
+          <p class="hint">Device changes take effect immediately.</p>
+        </div>
+
+        <div class="tab-panel" data-panel="general">
+          <label class="field">
+            <span>Maximum simultaneous calls</span>
+            <input type="number" id="maxCalls" min="2" max="8">
+          </label>
+          <label class="field">
+            <span>RTP port range</span>
+            <span class="row">
+              <input type="number" id="rtpPortLow" min="1024" max="65000">
+              <input type="number" id="rtpPortHigh" min="1024" max="65535">
+            </span>
+          </label>
+          <label class="check"><input type="checkbox" id="minimiseToTray"> Close to tray instead of quitting</label>
+          <label class="check"><input type="checkbox" id="startMinimised"> Start minimised</label>
+          <label class="check"><input type="checkbox" id="incomingPopup"> Show a popup for incoming calls</label>
+          <label class="field">
+            <span>Incoming-call popup position</span>
+            <span class="row">
+              <button type="button" class="btn small" id="btnResetPopup">Reset to default corner</button>
+            </span>
+          </label>
+          <p class="hint">The popup remembers where you drag it. Reset it if it ends up on a display that is no longer connected.</p>
+          <label class="field">
+            <span>Troubleshooting</span>
+            <span class="row">
+              <button type="button" class="btn small" id="btnOpenLogs">Open log folder</button>
+              <button type="button" class="btn small" id="btnReregister">Re-register lines now</button>
+            </span>
+          </label>
+          <label class="check"><input type="checkbox" id="sipTrace"> Record every SIP message in the log (turn off when done)</label>
+
+          <label class="field">
+            <span>Updates</span>
+            <select id="updateMode">
+              <option value="ask">Check and ask before downloading</option>
+              <option value="auto">Check and download automatically, ask before restarting</option>
+              <option value="off">Do not check (manual check still works)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Update server <em>(blank = the one built in)</em></span>
+            <input type="text" id="updateUrl" placeholder="https://github.com/your-org/twinline or https://host/path/">
+          </label>
+          <label class="field">
+            <span>&nbsp;</span>
+            <span class="row">
+              <button type="button" class="btn small" id="btnCheckUpdates">Check for updates now</button>
+            </span>
+          </label>
+          <p class="hint" id="updateStatus"></p>
+          <p class="hint" id="encryptionHint"></p>
+          <p class="hint" id="versionHint"></p>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn ghost" id="btnSettingsCancel">Cancel</button>
+        <button class="btn primary" id="btnSettingsSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="overlay hidden" id="historyOverlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Call history</h2>
+        <button class="icon-btn" id="btnHistoryClose" aria-label="Close history">&#10005;</button>
+      </div>
+      <div class="sheet-body">
+        <ul class="history" id="historyList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contacts -->
+  <div class="overlay hidden" id="contactsOverlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Contacts <span class="pill" id="contactCount"></span></h2>
+        <button class="icon-btn" id="btnContactsClose" aria-label="Close contacts">&#10005;</button>
+      </div>
+      <div class="sheet-body">
+        <div class="contacts-toolbar">
+          <input type="search" id="contactSearch" placeholder="Search name or number" autocomplete="off">
+          <button class="btn small primary" id="btnContactNew">Add</button>
+        </div>
+        <form class="contact-form hidden" id="contactForm">
+          <label class="full">Name<input type="text" id="cfName" required></label>
+          <label>Number<input type="text" id="cfNumber" inputmode="tel"></label>
+          <label>Line<select id="cfAccount"><option value="">Any line</option></select></label>
+          <label>Company<input type="text" id="cfCompany"></label>
+          <label>Email<input type="text" id="cfEmail"></label>
+          <label class="full">Notes<input type="text" id="cfNotes"></label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost small" id="btnContactCancel">Cancel</button>
+            <button type="submit" class="btn primary small" id="btnContactSave">Save</button>
+          </div>
+        </form>
+        <ul class="contacts" id="contactList"></ul>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn ghost small" id="btnContactsImport">Import…</button>
+        <span class="export-menu">
+          <span>Export</span>
+          <button class="btn ghost small" data-export="csv">CSV</button>
+          <button class="btn ghost small" data-export="json">JSON</button>
+          <button class="btn ghost small" data-export="vcf">vCard</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer -->
+  <div class="overlay hidden" id="transferOverlay">
+    <div class="sheet small">
+      <div class="sheet-head">
+        <h2>Transfer call</h2>
+        <button class="icon-btn" id="btnTransferClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="sheet-body">
+        <p class="hint" id="transferSubject"></p>
+        <label class="field">
+          <span>Transfer to</span>
+          <input type="text" id="transferTarget" placeholder="Number or sip:user@host">
+        </label>
+        <div id="attendedOptions"></div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn ghost" id="btnTransferCancel">Cancel</button>
+        <button class="btn primary" id="btnTransferGo">Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
