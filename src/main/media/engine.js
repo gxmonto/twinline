@@ -32,7 +32,18 @@ class AudioEngine extends EventEmitter {
     this._timer = null;
     this._nextTick = 0;
     this._levelCounter = 0;
+    this.taps = 0;
     this.stats = { ticks: 0, micUnderruns: 0 };
+  }
+
+  /** Register (+1) or release (−1) interest in per-tick 'frames' events. */
+  tap(delta) {
+    this.taps = Math.max(0, this.taps + delta);
+  }
+
+  /** Play a tone into a leg and the local speaker (see AudioMixer.queueTone). */
+  injectTone(callId, samples) {
+    return this.mixer.queueTone(callId, samples);
   }
 
   start() {
@@ -67,6 +78,11 @@ class AudioEngine extends EventEmitter {
 
     const speaker = this.mixer.tick(mic);
     if (this.mixer.legs.size) this.emit('speaker', speaker);
+
+    // Taps (transcription) get the raw per-party audio from this tick.
+    if (this.taps > 0 && this.mixer.legs.size) {
+      this.emit('frames', { mic: this.mixer.lastMic, legs: this.mixer.lastInbound });
+    }
 
     // Report levels ~10 times a second, not 50.
     if (++this._levelCounter >= 5) {

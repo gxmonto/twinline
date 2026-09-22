@@ -14,6 +14,8 @@ const { ContactStore } = require('./contacts');
 const { AudioEngine } = require('./media/engine');
 const { CallManager } = require('./callmanager');
 const { Updater } = require('./updater');
+const { ModelStore } = require('./transcribe/models');
+const { TranscriptionService } = require('./transcribe/service');
 
 const isDev = process.argv.includes('--dev');
 // Headless self-check: boot everything, verify the UI came up, print a
@@ -42,6 +44,16 @@ let contacts = null;
 let audio = null;
 let manager = null;
 let updater = null;
+let models = null;
+let transcription = null;
+
+/**
+ * Files that must exist as real files (native addons, the worker script)
+ * live in app.asar.unpacked when packaged. Map an in-asar path there.
+ */
+function unpacked(p) {
+  return p.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+}
 let powerBlockerId = null;
 let quitting = false;
 
@@ -148,6 +160,23 @@ async function runSmokeTest() {
     if (!report.dialer) problems.push('dialer not rendered');
     if (report.keypadKeys !== 12) problems.push(`expected 12 keypad keys, got ${report.keypadKeys}`);
     if (report.crashed) problems.push(`renderer threw: ${report.bodyText}`);
+
+    // Optional: run real speech through the transcription worker.
+    //   TwinLine.exe --smoke --smoke-wav=path\to\16k-mono.wav
+    const wavArg = (process.argv.find((a) => a.startsWith('--smoke-wav=')) || '').split('=').slice(1).join('=');
+    if (wavArg) {
+      if (!transcription.available) {
+        problems.push(`smoke-wav: model "${transcription.settings.model}" not installed in ${models.root}`);
+      } else {
+        const wav = readWavMono8k(wavArg);
+        const t0 = Date.now();
+        const segments = await transcription.testAudio(wav);
+        const text = segments.map((s) => s.text).join(' ');
+        console.log('smoke: transcript  =', JSON.stringify(text), `(${segments.length} segments, ${Date.now() - t0} ms)`);
+        if (!segments.length) problems.push('smoke-wav: no speech recognised');
+        report.transcript = text;
+      }
+    }
 
     const snapshot = manager.snapshot();
     console.log('smoke: report      =', JSON.stringify(report));
@@ -294,6 +323,24 @@ function resetPopupPosition() {
   return { ok: true };
 }
 
+/** 16-bit PCM WAV → mono Int16 at 8 kHz (nearest-sample), for the self-test. */
+function readWavMono8k(file) {
+  const buf = fs.readFileSync(file);
+  let offset = 12, channels = 1, rate = 16000, data = null;
+  while (offset + 8 <= buf.length) {
+    const id = buf.toString('ascii', offset, offset + 4);
+    const size = buf.readUInt32LE(offset + 4);
+    if (id === 'fmt ') { channels = buf.readUInt16LE(offset + 10); rate = buf.readUInt32LE(offset + 12); }
+    if (id === 'data') data = buf.subarray(offset + 8, offset + 8 + size);
+    offset += 8 + size + (size % 2);
+  }
+  if (!data) throw new Error(`${file}: not a PCM WAV`);
+  const frames = Math.floor(data.length / 2 / channels);
+  const out = new Int16Array(Math.floor(frames * 8000 / rate));
+  for (let i = 0; i < out.length; i++) out[i] = data.readInt16LE(Math.floor(i * rate / 8000) * 2 * channels);
+  return out;
+}
+
 async function runUpdateCheck(url) {
   const report = { url, current: app.getVersion(), exe: process.execPath, steps: [] };
   const finish = (ok) => {
@@ -394,9 +441,32 @@ async function bootstrap() {
   });
   audio.on('error', (err) => send('error', { message: err.message }));
 
+  models = new ModelStore(path.join(app.getPath('userData'), 'models'));
+  models.on('progress', (p) => send('models:progress', p));
+  models.on('installed', () => send('models:status', models.status()));
+  models.on('error', (e) => send('error', { message: `Model download failed: ${e.message}` }));
+
+  const platformDir = path.join(app.getAppPath(), 'node_modules',
+    `sherpa-onnx-${process.platform === 'win32' ? 'win' : process.platform}-${process.arch}`);
+  transcription = new TranscriptionService({
+    audio,
+    models,
+    transcriptsDir: path.join(app.getPath('userData'), 'transcripts'),
+    workerPath: unpacked(path.join(__dirname, 'transcribe', 'worker.js')),
+    platformDir: unpacked(platformDir),
+  });
+  transcription.configure(settings.data.transcription);
+  transcription.on('line', (p) => send('transcript:line', p));
+  transcription.on('speaking', (p) => send('transcript:speaking', p));
+  transcription.on('started', (p) => send('transcript:started', p));
+  transcription.on('finished', (p) => send('transcript:finished', p));
+  transcription.on('status', (p) => send('transcript:status', p));
+  transcription.on('warning', (message) => send('warning', { message }));
+
   manager = new CallManager({
     audio,
     contacts,
+    transcription,
     maxCalls: settings.data.behaviour.maxCalls,
   });
 
@@ -510,10 +580,24 @@ function registerIpc() {
     manager.maxCalls = saved.behaviour.maxCalls;
     log.setTraceSip(saved.behaviour.sipTrace);
     updater.configure(saved.updates);
+    transcription.configure(saved.transcription);
     await manager.applyAccounts(saved.accounts);
     updatePopup();
     return settings.redacted();
   });
+
+  handle('transcribe:start', ({ callId }) => manager.startTranscription(callId));
+  handle('transcribe:stop', ({ callId }) => manager.stopTranscription(callId));
+  handle('transcribe:live', ({ callId }) => transcription.liveTranscript(callId));
+  handle('transcribe:status', () => transcription.status());
+  handle('transcripts:list', () => transcription.list());
+  handle('transcripts:read', ({ file }) => transcription.read(file));
+  handle('transcripts:remove', ({ file }) => transcription.remove(file));
+  handle('transcripts:openFolder', async () => { await shell.openPath(transcription.dir); return { dir: transcription.dir }; });
+  handle('models:status', () => models.status());
+  handle('models:download', ({ id }) => models.download(id));
+  handle('models:cancel', ({ id }) => models.cancel(id));
+  handle('models:remove', ({ id }) => models.remove(id));
 
   handle('update:status', () => updater.status);
   handle('update:check', () => updater.check({ manual: true }));

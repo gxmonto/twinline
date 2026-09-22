@@ -73,9 +73,9 @@ npm start
 npm test
 ```
 
-167 tests: SIP parser, digest auth (including the RFC 2617 reference vector),
+101 tests: SIP parser, digest auth (including the RFC 2617 reference vector),
 SDP offer/answer, G.711 against the ITU tables, jitter buffer, conference
-mix-minus, contact import/export, plus end-to-end tests that run two complete
+mix-minus, contact import/export, transcription segmentation, plus end-to-end tests that run two complete
 user agents against each other over loopback and exercise call setup, hold,
 DTMF, line swapping, hold-inside-a-conference and conference teardown.
 
@@ -213,6 +213,61 @@ Ubuntu 22.04 and 24.04.
 
 Before distributing, change `homepage` in `package.json` — Debian and RPM both
 require a Homepage field and it is currently a placeholder.
+
+## Transcription
+
+TwinLine can transcribe calls **entirely on the local machine** — audio never
+leaves it and there is no per-minute cost. Lines appear live as each speaker
+pauses, labelled *You* / *Caller*, and the finished transcript is saved with
+the call.
+
+**Before you use it:** transcribing a call is legally the same as recording
+it. Many jurisdictions (including several US states) require *every* party's
+consent. TwinLine shows a red *Transcribing* tag and, by default, plays a short
+tone to both parties when transcription starts. How it is used is your
+responsibility.
+
+### Setup
+
+Settings → Transcription → pick a model and press *Download*:
+
+| Model | Download | Notes |
+|---|---|---|
+| whisper-base | ~160 MB | fastest; noticeably worse on phone audio |
+| **whisper-small** | ~375 MB | recommended; ~1–2 s per utterance on a modern laptop CPU |
+| whisper-medium | ~950 MB | best accuracy; several seconds per utterance |
+
+The models are int8 Whisper exports for [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx),
+fetched from Hugging Face into `%APPDATA%\TwinLine\models`. Whisper is
+multilingual and detects the language per utterance, so English/Spanish calls
+need no configuration (*Language* can pin one if detection misfires).
+
+### Using it
+
+Press **Transcribe** on a connected call, or turn on *Transcribe every call
+automatically*. The panel under the call list fills in as people speak.
+Transcripts are saved as `.txt` and `.json` in `%APPDATA%\TwinLine\transcripts`
+and are reachable from History (*Transcript* on the call, or the *Saved
+transcripts* list).
+
+### How it works
+
+Recognition runs in a separate utility process so Whisper's CPU work can never
+disturb the 20 ms audio clock. The mixer hands it your microphone and each
+caller's stream as **separate channels**, which is why speaker labels are
+exact rather than guessed. Each channel goes through a Silero voice-activity
+detector; when a speaker pauses (0.5 s), that utterance is decoded. Bursts
+under 0.4 s and Whisper's known silence hallucinations ("Thank you.") are
+discarded.
+
+To check a model against a recording, or debug a transcript complaint:
+
+```bash
+node tools/transcribe-file.js recording.wav --telephone
+```
+
+`--telephone` first squeezes the audio through the 8 kHz µ-law path a real
+call takes, so the result is representative.
 
 ## Updates
 

@@ -43,6 +43,20 @@
       </div>
       <ul class="conference-members" id="confMembers"></ul>
     </section>
+
+    <section id="transcriptPanel" class="transcript hidden">
+      <div class="transcript-head">
+        <h2>Transcript <span class="pill" id="transcriptWho"></span></h2>
+        <div class="transcript-actions">
+          <span class="speaking" id="speakYou" title="You are speaking">You</span>
+          <span class="speaking" id="speakCaller" title="Caller is speaking">Caller</span>
+          <button class="btn ghost small" id="btnTranscriptCopy" title="Copy the transcript">Copy</button>
+          <button class="btn ghost small" id="btnTranscriptClose" title="Hide this panel">&#10005;</button>
+        </div>
+      </div>
+      <ol class="transcript-lines" id="transcriptLines"></ol>
+      <p class="hint" id="transcriptFoot"></p>
+    </section>
   </main>
 
   <section class="dialer">
@@ -89,8 +103,40 @@
           <button class="tab active" data-tab="line1">Line 1</button>
           <button class="tab" data-tab="line2">Line 2</button>
           <button class="tab" data-tab="audio">Audio</button>
+          <button class="tab" data-tab="transcription">Transcription</button>
           <button class="tab" data-tab="general">General</button>
         </nav>
+
+        <div class="tab-panel" data-panel="transcription">
+          <p class="hint">Speech recognition runs entirely on this computer; call audio never leaves it.
+            Transcribing a call is legally the same as recording it — in many places every party must consent.</p>
+          <label class="field">
+            <span>Speech model</span>
+            <select id="trModel"></select>
+          </label>
+          <div id="trModelRows" class="model-rows"></div>
+          <label class="field">
+            <span>Language</span>
+            <select id="trLanguage">
+              <option value="auto">Detect automatically (English, Spanish, …)</option>
+              <option value="en">English only</option>
+              <option value="es">Spanish only</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="trAutoStart"> Transcribe every call automatically</label>
+          <label class="check"><input type="checkbox" id="trConsentTone"> Play a short tone to both parties when transcription starts</label>
+          <label class="field">
+            <span>CPU threads for recognition</span>
+            <input type="number" id="trThreads" min="1" max="16">
+          </label>
+          <label class="field">
+            <span>&nbsp;</span>
+            <span class="row">
+              <button type="button" class="btn small" id="btnTranscriptsFolder">Open transcripts folder</button>
+            </span>
+          </label>
+          <p class="hint" id="trStatus"></p>
+        </div>
 
         <div class="tab-panel active" data-panel="line1"></div>
         <div class="tab-panel" data-panel="line2"></div>
@@ -196,6 +242,26 @@
       </div>
       <div class="sheet-body">
         <ul class="history" id="historyList"></ul>
+        <h3 class="subhead">Saved transcripts</h3>
+        <ul class="history" id="transcriptList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transcript viewer -->
+  <div class="overlay hidden" id="transcriptOverlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="transcriptViewTitle">Transcript</h2>
+        <button class="icon-btn" id="btnTranscriptViewClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="sheet-body">
+        <pre class="transcript-text" id="transcriptViewText"></pre>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn ghost small" id="btnTranscriptViewDelete">Delete</button>
+        <button class="btn ghost small" id="btnTranscriptViewFolder">Open folder</button>
+        <button class="btn primary small" id="btnTranscriptViewCopy">Copy</button>
       </div>
     </div>
   </div>

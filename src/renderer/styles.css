@@ -271,6 +271,67 @@ input, select { font: inherit; }
 
 .level-bar span { display: block; height: 100%; width: 0; background: var(--green); transition: width 90ms linear; }
 
+/* ---- transcript --------------------------------------------------------- */
+
+.transcript {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.transcript-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.transcript h2 { margin: 0; font-size: 13px; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.transcript-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+
+.speaking {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  transition: all 120ms;
+}
+.speaking.on { color: #06240f; background: var(--green); border-color: var(--green); }
+
+.transcript-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  user-select: text;
+}
+.transcript-lines li { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid rgba(255, 255, 255, 0.04); font-size: 12.5px; line-height: 1.4; }
+.transcript-lines li:first-child { border-top: 0; }
+.transcript-lines .t { color: var(--text-dim); font-size: 11px; flex: 0 0 38px; padding-top: 2px; }
+.transcript-lines .s { flex: 0 0 48px; font-weight: 600; }
+.transcript-lines .s.you { color: var(--accent); }
+.transcript-lines .s.caller { color: var(--green); }
+.transcript-lines .x { flex: 1 1 auto; }
+.transcript-lines .x small { color: var(--text-dim); margin-left: 5px; }
+.transcript-lines .empty-line { color: var(--text-dim); font-style: italic; }
+
+.tag.red { background: rgba(229, 72, 77, 0.18); color: var(--red); }
+.tag.rec::before { content: '●'; margin-right: 4px; animation: pulse 1.2s infinite; }
+
+.transcript-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 12.5px/1.5 "Segoe UI", Inter, system-ui, sans-serif;
+  user-select: text;
+}
+
+.subhead { margin: 16px 0 6px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; }
+
+.model-rows { margin: -4px 0 10px; }
+.model-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; margin-bottom: 5px; font-size: 12px; background: var(--bg-input); }
+.model-row .name { flex: 1 1 auto; }
+.model-row .name small { display: block; color: var(--text-dim); }
+.model-row .bar { width: 90px; height: 5px; border-radius: 3px; background: #2a3140; overflow: hidden; }
+.model-row .bar span { display: block; height: 100%; background: var(--accent); }
+
 /* ---- dialer ------------------------------------------------------------- */
 
 .dialer {

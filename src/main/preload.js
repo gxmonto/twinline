@@ -85,6 +85,24 @@ contextBridge.exposeInMainWorld('twinline', {
     refresh: (reason) => call('network:refresh', { reason }),
   },
 
+  transcribe: {
+    start: (callId) => call('transcribe:start', { callId }),
+    stop: (callId) => call('transcribe:stop', { callId }),
+    live: (callId) => call('transcribe:live', { callId }),
+    status: () => call('transcribe:status'),
+    list: () => call('transcripts:list'),
+    read: (file) => call('transcripts:read', { file }),
+    remove: (file) => call('transcripts:remove', { file }),
+    openFolder: () => call('transcripts:openFolder'),
+  },
+
+  models: {
+    status: () => call('models:status'),
+    download: (id) => call('models:download', { id }),
+    cancel: (id) => call('models:cancel', { id }),
+    remove: (id) => call('models:remove', { id }),
+  },
+
   updates: {
     status: () => call('update:status'),
     check: () => call('update:check'),
@@ -121,5 +139,12 @@ contextBridge.exposeInMainWorld('twinline', {
     speaker: (fn) => on('audio:speaker', fn),
     popupCalls: (fn) => on('popup:calls', fn),
     update: (fn) => on('update', fn),
+    transcriptLine: (fn) => on('transcript:line', fn),
+    transcriptSpeaking: (fn) => on('transcript:speaking', fn),
+    transcriptStarted: (fn) => on('transcript:started', fn),
+    transcriptFinished: (fn) => on('transcript:finished', fn),
+    transcriptStatus: (fn) => on('transcript:status', fn),
+    modelsProgress: (fn) => on('models:progress', fn),
+    modelsStatus: (fn) => on('models:status', fn),
   },
 });
