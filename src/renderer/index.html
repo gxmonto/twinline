@@ -47,8 +47,10 @@
 
     <section id="transcriptPanel" class="transcript hidden">
       <div class="transcript-head">
-        <h2>Transcript <span class="pill" id="transcriptWho"></span></h2>
+        <h2>Transcript <span class="pill" id="transcriptWho"></span>
+          <span class="pill countdown hidden" id="transcriptCountdown"></span></h2>
         <div class="transcript-actions">
+          <button class="btn small hidden" id="btnTranscriptKeep" title="Cancel the automatic close">Keep open</button>
           <span class="speaking" id="speakYou" title="You are speaking">You</span>
           <span class="speaking" id="speakCaller" title="Caller is speaking">Caller</span>
           <button class="btn ghost small" id="btnTranscriptCopy" title="Copy the transcript">Copy</button>

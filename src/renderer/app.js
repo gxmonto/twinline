@@ -180,13 +180,19 @@ function wireEvents() {
   api.on.dtmf(({ digit }) => toast(`Received DTMF: ${digit}`));
   api.on.message(({ from, body }) => toast(`Message from ${from}: ${body}`.slice(0, 160)));
 
-  // Title bar (the window is frameless; this bar is the only one)
+  // Title bar. With native caption buttons (Windows/Linux overlay) the OS owns
+  // minimise/maximise/close and double-click; our copies only serve platforms
+  // without the overlay.
+  const nativeControls = appInfo.windowControls === 'native';
+  if (nativeControls) document.body.classList.add('wco');
   $('btnMinimise').onclick = () => api.window.minimise();
   $('btnMaximise').onclick = () => api.window.maximise();
   $('btnClose').onclick = () => api.window.close();
-  document.querySelector('.titlebar').addEventListener('dblclick', (e) => {
-    if (!e.target.closest('button, select, input')) api.window.maximise();
-  });
+  if (!nativeControls) {
+    document.querySelector('.titlebar').addEventListener('dblclick', (e) => {
+      if (!e.target.closest('button, select, input')) api.window.maximise();
+    });
+  }
   api.on.windowState(({ maximized }) => {
     $('btnMaximise').innerHTML = maximized ? '&#10697;' : '&#9633;';
     $('btnMaximise').title = maximized ? 'Restore' : 'Maximise';
@@ -960,13 +966,20 @@ function renderTranscriptFoot(record) {
     foot.textContent = 'Recognition runs on this computer.';
     return;
   }
-  const saved = record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}.` : 'Finished; nothing to save.';
+  foot.textContent = record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}.` : 'Finished; nothing to save.';
   if (!autoClose || autoClose.callId !== record.callId) startAutoClose(record.callId);
-  if (!autoClose) { foot.textContent = saved; return; }
+  renderCountdown();
+}
 
-  foot.innerHTML = `${esc(saved)} <span class="transcript-foot-actions">Closing in <b>${autoClose.remaining}</b> s
-    <button class="btn ghost small" id="btnTranscriptKeep">Keep open</button></span>`;
-  $('btnTranscriptKeep').onclick = () => { cancelAutoClose(); foot.textContent = saved; };
+/** The countdown lives in the header, next to the title, where it is seen. */
+function renderCountdown() {
+  const pill = $('transcriptCountdown');
+  const keep = $('btnTranscriptKeep');
+  if (!autoClose) { pill.classList.add('hidden'); keep.classList.add('hidden'); return; }
+  pill.textContent = `Closing in ${autoClose.remaining} s`;
+  pill.classList.remove('hidden');
+  keep.classList.remove('hidden');
+  keep.onclick = () => { cancelAutoClose(); renderCountdown(); };
 }
 
 function startAutoClose(callId) {
@@ -981,13 +994,14 @@ function startAutoClose(callId) {
       if (shownTranscript === id) { shownTranscript = null; renderTranscript(); }
       return;
     }
-    const b = $('transcriptFoot').querySelector('b');
-    if (b) b.textContent = String(autoClose.remaining);
+    renderCountdown();
   }, 1000);
 }
 
 function cancelAutoClose() {
   if (autoClose) { clearInterval(autoClose.timer); autoClose = null; }
+  const pill = $('transcriptCountdown');
+  if (pill) { pill.classList.add('hidden'); $('btnTranscriptKeep').classList.add('hidden'); }
 }
 
 function renderSpeaking(record) {
