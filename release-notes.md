@@ -1,3 +1,1 @@
-- When the other side pulls you into a conference, TwinLine now says so: a "Conference (their side)" tag appears on the call when the PBX identifies itself as a conference bridge or renames the call ("Conference 8000"). TwinLine cannot list who is in a conference hosted elsewhere — the PBX does not tell a phone — but the transcript now tries to tell voices apart: when it is confident several people are speaking through one line, lines are labelled Caller 1, Caller 2, … by voice. Treat those labels as approximate; phone audio makes voices hard to separate. A small voice model (29 MB) is fetched automatically.
-- Redirect a ringing call without answering: the ↪ button on an incoming call sends it to another number.
-- Dialogs no longer run under the window's corner buttons.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
