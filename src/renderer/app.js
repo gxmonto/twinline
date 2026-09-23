@@ -235,6 +235,7 @@ function wireEvents() {
   api.on.transcriptLine(onTranscriptLine);
   api.on.transcriptSpeaking(onTranscriptSpeaking);
   api.on.transcriptFinished(onTranscriptFinished);
+  api.on.transcriptVoices(onTranscriptVoices);
   api.on.transcriptStatus(() => { if (!$('settingsOverlay').classList.contains('hidden')) renderSettingsTranscription(); });
   api.on.modelsProgress(onModelProgress);
   api.on.modelsStatus(() => renderSettingsTranscription());
@@ -373,6 +374,7 @@ function renderCalls() {
       <div class="call-meta">
         ${statusTag(call)}
         ${call.transcribing ? '<span class="tag red rec">Transcribing</span>' : ''}
+        ${call.hostedConference ? '<span class="tag purple" title="The other side moved this call into a conference bridge">Conference (their side)</span>' : ''}
         <span>${esc(account ? account.label : call.accountId)}</span>
         <span data-duration="${esc(call.id)}">${formatDuration(call)}</span>
         ${call.codec ? `<span>${esc(call.codec)}</span>` : ''}
@@ -405,7 +407,8 @@ function callButtons(call, connectedCount, conferenceRunning) {
     `<button class="${cls}" data-action="${action}" data-call="${id}">${label}</button>`;
 
   if (call.state === 'incoming') {
-    return b('answer', 'Answer', 'btn call small') + b('reject', 'Decline', 'btn danger small');
+    return b('answer', 'Answer', 'btn call small') + b('reject', 'Decline', 'btn danger small')
+      + `<button class="btn ghost small icon-only" data-action="deflect" data-call="${id}" title="Send this call to another number without answering" aria-label="Redirect">&#8618;</button>`;
   }
   if (call.state === 'calling' || call.state === 'ringing') {
     return b('hangup', 'Cancel', 'btn danger small');
@@ -534,6 +537,7 @@ function onCallAction(action, callId) {
     case 'confHold': return guard(api.conference.holdParty(callId));
     case 'confResume': return guard(api.conference.resumeParty(callId));
     case 'transfer': return openTransfer(callId);
+    case 'deflect': return openTransfer(callId, { deflect: true });
     case 'transcribe': return guard(api.transcribe.start(callId));
     case 'transcribeStop': return guard(api.transcribe.stop(callId));
     default: return null;
@@ -593,16 +597,24 @@ function updateRingtone() {
 
 // ---- transfer ---------------------------------------------------------------
 
-function openTransfer(callId) {
+let transferMode = 'transfer';        // 'transfer' (connected call) | 'deflect' (ringing call)
+
+function openTransfer(callId, { deflect = false } = {}) {
   const call = state.calls.find((c) => c.id === callId);
   if (!call) return;
   transferContext = callId;
+  transferMode = deflect || call.state === 'incoming' ? 'deflect' : 'transfer';
 
-  $('transferSubject').textContent = `Transferring ${call.remoteNumber || 'this call'}.`;
+  const who = call.contactName || call.remoteName || call.remoteNumber || 'this call';
+  $('transferSubject').textContent = transferMode === 'deflect'
+    ? `Send the ringing call from ${who} to another number. It will not be answered here.`
+    : `Transferring ${who}.`;
+  $('transferOverlay').querySelector('h2').textContent = transferMode === 'deflect' ? 'Redirect ringing call' : 'Transfer call';
+  $('btnTransferGo').textContent = transferMode === 'deflect' ? 'Redirect' : 'Transfer';
   $('transferTarget').value = '';
 
-  // Offer an attended transfer to any other connected call.
-  const others = state.calls.filter((c) => c.id !== callId && c.state === 'connected');
+  // Offer an attended transfer to any other connected call (not when redirecting).
+  const others = transferMode === 'deflect' ? [] : state.calls.filter((c) => c.id !== callId && c.state === 'connected');
   $('attendedOptions').innerHTML = others.length
     ? `<p class="hint">Or hand it to a call already in progress:</p>`
       + others.map((c) => `<button class="btn small" data-attended="${esc(c.id)}">`
@@ -628,7 +640,9 @@ function closeTransfer() {
 async function doTransfer() {
   const target = $('transferTarget').value.trim();
   if (!target || !transferContext) return;
-  await guard(api.call.transferBlind(transferContext, target));
+  await guard(transferMode === 'deflect'
+    ? api.call.deflect(transferContext, target)
+    : api.call.transferBlind(transferContext, target));
   closeTransfer();
 }
 
@@ -904,10 +918,18 @@ function onTranscriptStarted(record) {
   renderTranscript();
 }
 
-function onTranscriptLine({ callId, line }) {
+function onTranscriptLine({ callId, line, voices }) {
   const record = transcripts.get(callId);
   if (!record) return;
   record.lines.push(line);
+  if (voices) record.voiceCounts = voices;
+  if (shownTranscript === callId) renderTranscript();
+}
+
+function onTranscriptVoices({ callId, party, voices }) {
+  const record = transcripts.get(callId);
+  if (record) { record.voiceCounts = record.voiceCounts || {}; }
+  toast(`Another voice seems to be on the line from ${party} (${voices} voices). The transcript labels them Caller 1, 2, … by voice — approximate.`);
   if (shownTranscript === callId) renderTranscript();
 }
 
@@ -931,17 +953,22 @@ function renderTranscript() {
   if (!record) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
 
+  const totalVoices = Object.values(record.voiceCounts || {}).reduce((n, v) => n + Math.max(0, v - 1), 0);
   $('transcriptWho').textContent = (record.parties && record.parties.length > 1)
     ? `Conference · ${record.parties.join(', ')}`
     : (record.remoteName || record.remoteNumber || '');
+  $('transcriptWho').className = 'pill' + (totalVoices > 0 ? ' voices' : '');
+  if (totalVoices > 0) $('transcriptWho').textContent += ` · ${totalVoices + 1} voices`;
   const list = $('transcriptLines');
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
 
   const multi = multiParty(record);
+  const voiceCounts = record.voiceCounts || {};
+  const severalVoices = Object.values(voiceCounts).some((n) => n > 1);
   list.innerHTML = record.lines.length
     ? record.lines.map((l) => `<li>
         <span class="t">${stamp(l.atMs)}</span>
-        <span class="s ${l.speaker}" title="${esc(l.party || '')}">${esc(speakerLabel(l, multi))}</span>
+        <span class="s ${l.speaker}${severalVoices && l.voice ? ` v${Math.min(l.voice, 4)}` : ''}" title="${esc(l.party || '')}">${esc(speakerLabel(l, multi, voiceCounts))}</span>
         <span class="x">${esc(l.text)}${l.lang && l.lang !== 'en' ? `<small>${esc(l.lang)}</small>` : ''}</span>
       </li>`).join('')
     : `<li class="empty-line">${record.finished ? 'Nothing was said.' : 'Listening… lines appear when a speaker pauses.'}</li>`;
@@ -1022,14 +1049,17 @@ function multiParty(record) {
   return labels.size > 1 || known.size > 1;
 }
 
-function speakerLabel(line, multi) {
+function speakerLabel(line, multi, voiceCounts = {}) {
   if (line.speaker === 'you') return 'You';
-  return multi && line.party ? line.party : 'Caller';
+  const base = multi && line.party ? line.party : 'Caller';
+  const voices = line.partyId ? voiceCounts[line.partyId] : 0;
+  if (voices > 1 && line.voice) return multi && line.party ? `${base} · voice ${line.voice}` : `Caller ${line.voice}`;
+  return base;
 }
 
 function transcriptToText(record) {
   const multi = multiParty(record);
-  return record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi)}: ${l.text}`).join('\n');
+  return record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi, record.voiceCounts || {})}: ${l.text}`).join('\n');
 }
 
 async function copyText(text) {
@@ -1093,12 +1123,15 @@ async function renderSettingsTranscription() {
   select.onchange = () => { renderModelRows(); renderLanguageField(); };
 
   if (status) {
-    $('trStatus').textContent = {
+    const voices = modelsStatus && modelsStatus.speakerInstalled
+      ? ' Voice separation on: several people on one line are labelled Caller 1, 2, …'
+      : ' Voice separation model not downloaded yet (fetched automatically, 29 MB).';
+    $('trStatus').textContent = ({
       off: status.available ? 'Ready. The engine starts when a transcript is requested.' : 'Download a speech model above to enable transcription.',
       starting: 'Speech engine starting…',
       ready: `Speech engine running${status.active.length ? ` — transcribing ${status.active.length} call(s)` : ''}.`,
       error: `Speech engine error: ${status.error}`,
-    }[status.state] || '';
+    }[status.state] || '') + (status.available ? voices : '');
     $('trStatus').classList.toggle('warn', status.state === 'error');
   }
 }

@@ -164,6 +164,7 @@ class CallManager extends EventEmitter {
     call.on('dtmf', (digit) => this.emit('dtmf', { callId: call.id, digit }));
     call.on('warning', (message) => this.emit('warning', { callId: call.id, message }));
     call.on('referred', (target) => this.emit('referred', { callId: call.id, target }));
+    call.on('hostedConference', (reason) => this.emit('warning', { callId: call.id, message: `${call.remoteDisplayName || call.remoteNumber}: this call is a conference hosted by the other side (${reason}).` }));
     call.on('terminated', (info) => {
       this._recordHistory(call, info);
       this.calls.delete(call.id);
@@ -324,6 +325,12 @@ class CallManager extends EventEmitter {
 
   reject(callId, status = 486) {
     this.call(callId).reject(status);
+    return { ok: true };
+  }
+
+  /** Redirect a ringing incoming call to another number without answering. */
+  deflect(callId, target) {
+    this.call(callId).deflect(target);
     return { ok: true };
   }
 

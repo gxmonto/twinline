@@ -14,6 +14,7 @@ const path = require('path');
 const os = require('os');
 const { EventEmitter } = require('events');
 const log = require('../log').child('transcribe');
+const { VoiceClusterer } = require('./voices');
 
 const FRAME_SAMPLES = 160;
 
@@ -69,6 +70,13 @@ class TranscriptionService extends EventEmitter {
 
   get available() {
     return this.models.installed(this.settings.model) && this.models.installed('vad');
+  }
+
+  /** Fetch the small speaker model for installs that predate it. */
+  async ensureSpeakerModel() {
+    if (this.models.installed('speaker') || !this.available) return;
+    await this.models.download('speaker').catch((err) => log.warn('speaker model download failed', err));
+    if (this.worker && !this.live.size) this._shutdownWorker();     // reload with voices on
   }
 
   status() {
@@ -135,12 +143,14 @@ class TranscriptionService extends EventEmitter {
 
     const model = this.models.paths(this.settings.model);
     const vad = this.models.paths('vad');
+    const speaker = this.models.installed('speaker') ? this.models.paths('speaker') : null;
     // Leave two cores for the audio clock and the UI; recognition takes the rest.
     const threads = this.settings.threads > 0 ? this.settings.threads : Math.max(2, Math.min(8, os.cpus().length - 2));
     child.postMessage({
       type: 'init',
       model: { ...model, type: this.models.constructor.entry(this.settings.model).type },
       vadModel: vad.vad,
+      speakerModel: speaker ? speaker.speaker : null,
       language: this.settings.language,
       threads,
     });
@@ -150,7 +160,8 @@ class TranscriptionService extends EventEmitter {
     switch (msg.type) {
       case 'ready':
         this.workerState = 'ready';
-        log.info('worker ready', { sherpa: msg.version });
+        this.voicesEnabled = !!msg.voices;
+        log.info('worker ready', { sherpa: msg.version, voices: this.voicesEnabled });
         for (const w of this._readyWaiters.splice(0)) w.resolve();
         this.emit('status', this.status());
         break;
@@ -252,7 +263,7 @@ class TranscriptionService extends EventEmitter {
         continue;
       }
       const channel = `${record.callId}|party:${p.callId}`;
-      record.parties.set(p.callId, { label: p.label || 'Caller', channel, openedAt: Date.now() });
+      record.parties.set(p.callId, { label: p.label || 'Caller', channel, openedAt: Date.now(), voices: new VoiceClusterer() });
       record.partyLabels[p.callId] = p.label || 'Caller';
       if (this.worker && this.workerState === 'ready') {
         this.worker.postMessage({ type: 'open', id: channel, label: p.label || 'Caller', inputRate: 8000 });
@@ -288,8 +299,9 @@ class TranscriptionService extends EventEmitter {
       model: this.settings.model,
       language: this.settings.language,
       lines: [],
-      parties: new Map(),          // partyCallId -> { label, channel, openedAt }
+      parties: new Map(),          // partyCallId -> { label, channel, openedAt, voices }
       partyLabels: {},             // partyCallId -> label, kept after a party leaves
+      voiceCounts: {},             // partyCallId -> distinct voices heard (>1 means several people)
       speaking: { you: false, caller: false },
       speakingParties: new Set(),
       finished: false,
@@ -407,11 +419,24 @@ class TranscriptionService extends EventEmitter {
       const atMs = Math.max(0, openedAt + seg.startMs - record.callAnsweredAt);
       // A mic utterance that started before this transcript began is not ours.
       if (mic && openedAt + seg.endMs < record.startedAt) continue;
+      // Several people can speak through one party's stream (a PBX-hosted
+      // conference); group their utterances by voice.
+      let voice = null;
+      if (!mic && party && seg.embedding && seg.embedding.length) {
+        const result = party.voices.assign(seg.embedding, seg.endMs - seg.startMs);
+        voice = result.voice;
+        if (result.isNew && party.voices.count > 1) {
+          record.voiceCounts[partyId] = party.voices.count;
+          log.info('another voice detected on the line', { call: record.callId.slice(0, 8), party: record.partyLabels[partyId], voices: party.voices.count });
+          this.emit('voices', { callId: record.callId, party: record.partyLabels[partyId], voices: party.voices.count });
+        }
+      }
       const line = {
         n: record.lines.length + 1,
         speaker: mic ? 'you' : 'caller',
         party: mic ? null : (record.partyLabels[partyId] || 'Caller'),
         partyId: mic ? null : partyId,
+        voice,
         atMs,
         durationMs: seg.endMs - seg.startMs,
         text: seg.text,
@@ -419,7 +444,7 @@ class TranscriptionService extends EventEmitter {
         error: seg.error || undefined,
       };
       record.lines.push(line);
-      this.emit('line', { callId: record.callId, line });
+      this.emit('line', { callId: record.callId, line, voices: record.voiceCounts });
     }
   }
 
@@ -446,6 +471,7 @@ class TranscriptionService extends EventEmitter {
       ...rest,
       speaking: { ...speaking },
       parties: [...parties.values()].map((p) => p.label),
+      voiceCounts: { ...record.voiceCounts },
       file: record.file ? path.basename(record.file) : null,
     };
   }
@@ -466,7 +492,7 @@ class TranscriptionService extends EventEmitter {
     const json = path.join(this.dir, `${base}.json`);
     const txt = path.join(this.dir, `${base}.txt`);
 
-    const { speaking, speakingParties, stopping, parties, ...toSave } = record;
+    const { speaking, speakingParties, stopping, parties, ...toSave } = record;   // parties hold clusterers
     fs.writeFileSync(json, JSON.stringify(toSave, null, 2));
     fs.writeFileSync(txt, formatTranscript(toSave));
     return json;
@@ -531,10 +557,17 @@ class TranscriptionService extends EventEmitter {
   }
 }
 
-/** Speaker label for a line: "You", or the party's name when more than one party spoke. */
-function speakerLabel(line, multiParty) {
+/**
+ * Speaker label for a line: "You"; the party's name when more than one party
+ * spoke; and a voice number when several people were heard through one party
+ * ("Caller 2", "Ada · voice 2").
+ */
+function speakerLabel(line, multiParty, voiceCounts = {}) {
   if (line.speaker === 'you') return 'You';
-  return multiParty && line.party ? line.party : 'Caller';
+  const base = multiParty && line.party ? line.party : 'Caller';
+  const voices = line.partyId ? voiceCounts[line.partyId] : 0;
+  if (voices > 1 && line.voice) return multiParty && line.party ? `${base} · voice ${line.voice}` : `Caller ${line.voice}`;
+  return base;
 }
 
 function hasMultipleParties(record) {
@@ -558,7 +591,10 @@ function formatTranscript(record) {
     '',
   ].filter((l) => l !== null);
   const multi = hasMultipleParties(record);
-  const body = record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi)}: ${l.text}`);
+  const voiceCounts = record.voiceCounts || {};
+  const several = Object.values(voiceCounts).some((n) => n > 1);
+  if (several) head.splice(head.length - 1, 0, 'Several voices were heard on the line; "Caller 1/2/…" are told apart by voice and are approximate.');
+  const body = record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi, voiceCounts)}: ${l.text}`);
   return head.concat(body).join('\n') + '\n';
 }
 

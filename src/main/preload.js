@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('twinline', {
     dial: (target, accountId) => call('call:dial', { target, accountId }),
     answer: (callId) => call('call:answer', { callId }),
     reject: (callId, status) => call('call:reject', { callId, status }),
+    /** Redirect a ringing incoming call elsewhere without answering (302). */
+    deflect: (callId, target) => call('call:deflect', { callId, target }),
     hangup: (callId) => call('call:hangup', { callId }),
     hangupAll: () => call('call:hangupAll'),
     hold: (callId) => call('call:hold', { callId }),
@@ -150,6 +152,7 @@ contextBridge.exposeInMainWorld('twinline', {
     transcriptStarted: (fn) => on('transcript:started', fn),
     transcriptFinished: (fn) => on('transcript:finished', fn),
     transcriptStatus: (fn) => on('transcript:status', fn),
+    transcriptVoices: (fn) => on('transcript:voices', fn),
     modelsProgress: (fn) => on('models:progress', fn),
     modelsStatus: (fn) => on('models:status', fn),
     windowState: (fn) => on('window:state', fn),

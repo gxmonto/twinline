@@ -37,13 +37,14 @@ async function init(msg) {
       sherpa,
       model: msg.model,
       vadModel: msg.vadModel,
+      speakerModel: msg.speakerModel || null,
       language: msg.language,
       threads: msg.threads,
       onSegment: (seg) => post({ type: 'segment', ...seg }),
       onSpeaking: (id, speaking) => post({ type: 'speaking', id, speaking }),
     });
     await transcriber.init();
-    post({ type: 'ready', version: sherpa.version });
+    post({ type: 'ready', version: sherpa.version, voices: !!transcriber.speaker });
   } catch (err) {
     post({ type: 'error', fatal: true, message: `could not load the model: ${err.message}` });
   }

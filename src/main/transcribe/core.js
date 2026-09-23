@@ -56,15 +56,17 @@ class Transcriber {
    * @param {(seg: object) => void} opts.onSegment
    * @param {(id: string, speaking: boolean) => void} [opts.onSpeaking]
    */
-  constructor({ sherpa, model, vadModel, language = 'auto', threads = 4, onSegment, onSpeaking = () => {} }) {
+  constructor({ sherpa, model, vadModel, speakerModel = null, language = 'auto', threads = 4, onSegment, onSpeaking = () => {} }) {
     this.sherpa = sherpa;
     this.model = model;
     this.vadModel = vadModel;
+    this.speakerModel = speakerModel;      // optional: embeddings for telling voices apart
     this.language = language;
     this.threads = threads;
     this.onSegment = onSegment;
     this.onSpeaking = onSpeaking;
     this.recognizer = null;
+    this.speaker = null;
     this.channels = new Map();
     this.queue = [];
     this.decoding = false;
@@ -100,7 +102,25 @@ class Transcriber {
       featConfig: { sampleRate: TARGET_RATE, featureDim: this.model.type === 'nemo_transducer' ? 128 : 80 },
       modelConfig,
     });
+    if (this.speakerModel && this.sherpa.SpeakerEmbeddingExtractor) {
+      this.speaker = new this.sherpa.SpeakerEmbeddingExtractor({ model: this.speakerModel, numThreads: 1, provider: 'cpu', debug: 0 });
+    }
     return this;
+  }
+
+  /** Voice fingerprint of an utterance, or null when no speaker model is loaded. */
+  _embedding(samples) {
+    if (!this.speaker) return null;
+    try {
+      const stream = this.speaker.createStream();
+      stream.acceptWaveform({ samples, sampleRate: TARGET_RATE });
+      stream.inputFinished();
+      if (!this.speaker.isReady(stream)) return null;
+      // false: copy out; Electron refuses N-API external buffers.
+      return Array.from(this.speaker.compute(stream, false));
+    } catch {
+      return null;
+    }
   }
 
   _vad() {
@@ -219,6 +239,9 @@ class Transcriber {
         const text = String(result.text || '').trim();
         if (!text || HALLUCINATIONS.has(text.toLowerCase())) { this.stats.dropped++; continue; }
         this.stats.segments++;
+        // Only the far end can hide several people behind one stream; the
+        // microphone is always the local user.
+        const embedding = job.label === 'you' ? null : this._embedding(job.samples);
         this.onSegment({
           channel: job.channel,
           label: job.label,
@@ -227,6 +250,7 @@ class Transcriber {
           startMs: job.startMs,
           endMs: job.endMs,
           decodeMs: Date.now() - t0,
+          embedding,
         });
       }
     } finally {

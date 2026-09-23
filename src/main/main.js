@@ -588,11 +588,13 @@ async function bootstrap() {
     platformDir: unpacked(platformDir),
   });
   transcription.configure(settings.data.transcription);
+  if (!isSmoke) setTimeout(() => transcription.ensureSpeakerModel(), 20000);
   transcription.on('line', (p) => send('transcript:line', p));
   transcription.on('speaking', (p) => send('transcript:speaking', p));
   transcription.on('started', (p) => send('transcript:started', p));
   transcription.on('finished', (p) => send('transcript:finished', p));
   transcription.on('status', (p) => send('transcript:status', p));
+  transcription.on('voices', (p) => send('transcript:voices', p));
   transcription.on('warning', (message) => send('warning', { message }));
 
   manager = new CallManager({
@@ -763,6 +765,7 @@ function registerIpc() {
   handle('call:dial', ({ target, accountId }) => manager.dial(target, { accountId }));
   handle('call:answer', ({ callId }) => manager.answer(callId));
   handle('call:reject', ({ callId, status }) => manager.reject(callId, status));
+  handle('call:deflect', ({ callId, target }) => manager.deflect(callId, target));
   handle('call:hangup', ({ callId }) => manager.hangup(callId));
   handle('call:hangupAll', () => manager.hangupAll());
   handle('call:hold', ({ callId }) => manager.hold(callId));

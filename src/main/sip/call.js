@@ -62,6 +62,7 @@ class Call extends EventEmitter {
     this.localSdpSessionId = String(Math.floor(Date.now() / 1000));
     this.negotiated = null;
     this.conferenceMember = false;        // set by the CallManager
+    this.hostedConference = false;        // the far end is a conference bridge
 
     // Transactions
     this.inviteTxn = null;
@@ -118,6 +119,7 @@ class Call extends EventEmitter {
       endReason: this.endReason,
       endStatus: this.endStatus,
       codec: this.negotiated ? this.negotiated.codec.name : null,
+      hostedConference: !!this.hostedConference,
     };
   }
 
@@ -332,8 +334,13 @@ class Call extends EventEmitter {
   _absorbDialogState(message, isResponse) {
     const contact = P.getHeader(message, 'contact');
     if (contact && contact !== '*') {
-      this.remoteTarget = P.parseNameAddr(contact).uri;
+      const parsed = P.parseNameAddr(contact);
+      this.remoteTarget = parsed.uri;
+      // RFC 4579: a conference focus marks its Contact with ;isfocus. That is
+      // the only reliable signal that the far end is a conference bridge.
+      if ('isfocus' in parsed.params || 'isfocus' in (parsed.uri.params || {})) this._markHostedConference('isfocus');
     }
+    this._absorbRemoteIdentity(message);
     const recordRoute = P.getHeaders(message, 'record-route');
     if (recordRoute.length) {
       // UAC reverses the Record-Route order; UAS keeps it (§12.1).
@@ -345,6 +352,50 @@ class Call extends EventEmitter {
         this.routeSet.unshift(this.ua.outboundRoute);
       }
     }
+  }
+
+  /**
+   * PBXs rename the far end when they move a call into a conference bridge
+   * ("Conference 8000", "Conf Room 1"); the new identity arrives in
+   * P-Asserted-Identity, Remote-Party-ID, or the From/To display name of a
+   * re-INVITE/UPDATE. Follow it so the card and the transcript say so.
+   */
+  _absorbRemoteIdentity(message) {
+    const raw = P.getHeader(message, 'p-asserted-identity') || P.getHeader(message, 'remote-party-id')
+      || (message.method ? P.getHeader(message, 'from') : P.getHeader(message, 'to'));
+    if (!raw) return;
+    let parsed;
+    try { parsed = P.parseNameAddr(raw); } catch { return; }
+    const name = parsed.name && parsed.name.trim();
+    if (name && name !== this.remoteDisplayName && this.state !== 'init') {
+      this.ua.log.info('remote identity changed', { call: this.id.slice(0, 8), from: this.remoteDisplayName, to: name });
+      this.remoteDisplayName = name;
+      if (/\b(conf|conference|bridge|meet)/i.test(name)) this._markHostedConference(`identity "${name}"`);
+      this.emit('update');
+    }
+  }
+
+  _markHostedConference(reason) {
+    if (this.hostedConference) return;
+    this.hostedConference = true;
+    this.ua.log.info('call is a hosted conference', { call: this.id.slice(0, 8), reason });
+    this.emit('hostedConference', reason);
+    this.emit('update');
+  }
+
+  /**
+   * Send a ringing incoming call somewhere else without answering it
+   * (RFC 3261 302 Moved Temporarily). The PBX places the call to the new
+   * target; from our side the call simply ends.
+   */
+  deflect(target) {
+    if (this.state !== 'incoming') throw new Error('only a ringing incoming call can be redirected');
+    const uri = this.ua.normalizeTarget(target);
+    const response = this.ua.makeDialogResponse(this.pendingServerInvite, 302, this, 'Moved Temporarily');
+    response.headers.contact = [`<${P.stringifyUri(uri)}>`];
+    this.serverTxn.respond(response);
+    this.ua.log.info('call redirected while ringing', { call: this.id.slice(0, 8), to: P.stringifyUri(uri) });
+    this._finish('redirected', 302, `Redirected to ${uri.user || uri.host}`);
   }
 
   // ---- outgoing call ------------------------------------------------------
