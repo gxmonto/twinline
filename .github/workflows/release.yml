@@ -75,12 +75,10 @@ jobs:
           # Checksums for every installer, so a download can be verified by hand
           # (the Linux packages are not signed; the updater checks Windows and
           # AppImage downloads against the .yml manifests by itself).
-          mkdir -p /tmp/assets && cd /tmp/assets
-          gh release download "$TAG" --pattern '*.exe' --pattern '*.deb' --pattern '*.rpm' --pattern '*.AppImage'
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-          gh release upload "$TAG" SHA256SUMS.txt --clobber
-          cd "$GITHUB_WORKSPACE"
+          # (gh resolves the repository from the checkout, so stay in the workspace.)
+          gh release download "$TAG" -D /tmp/assets --pattern '*.exe' --pattern '*.deb' --pattern '*.rpm' --pattern '*.AppImage'
+          (cd /tmp/assets && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          gh release upload "$TAG" /tmp/assets/SHA256SUMS.txt --clobber
           # Release text: a "which file do I download?" section, then the notes.
           {
             echo "## Downloads"
