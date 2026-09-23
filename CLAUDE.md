@@ -1,96 +1,183 @@
 # TwinLine — notes for Claude Code
 
 Dual-line SIP softphone (Electron, plain JavaScript, no framework, no build
-step). Owner: Mike (GitHub `gxmonto`). Users are real: JetWave and Vital SIP
-accounts, Windows day to day, Linux packages too. Ship carefully.
+step). Owner: Mike (GitHub `gxmonto`, git author "mikebord", mike@sightwatch.com).
+Users are real: JetWave and Vital SIP accounts, Windows day to day, Linux
+packages too. Ship carefully; every release reaches installed copies through
+the built-in updater within hours.
 
 ## Commands
 
 ```bash
-npm test                      # 100+ unit + loopback end-to-end tests; must pass
-npm run smoke                 # boots the real app headlessly; asserts UI, tray icon
+npm test                      # unit + loopback end-to-end tests; must pass
+npm run smoke                 # boots the real app headlessly: UI, tray icon, a popped-out panel
 npx electron . --smoke --smoke-wav=<16k mono wav>   # also runs speech through the recognition worker
 npm run dist:win              # dist/<version>/ — needs Windows Developer Mode (or dist:win:noedit)
 npm run dist:linux:docker     # .deb/.rpm/AppImage via Docker (cannot build on Windows natively)
 npm run release -- patch|minor|major|x.y.z          # THE way to ship (see below)
 node tools/transcribe-file.js speech.wav --telephone  # check a speech model on a recording
+node tools/serve-updates.js dist/<v> 8123             # rehearse an update against a local feed
 ```
+
+Packaged binaries can be checked too: `dist/<v>/win-unpacked/TwinLine.exe --smoke`
+and `--update-check=<feed url>` (download-only rehearsal of the updater).
 
 ## Shipping
 
-1. Write what changed for users in `release-notes.md` (empty notes are refused).
+1. Write what changed *for users* in `release-notes.md` (empty notes are refused).
 2. Commit everything (a dirty tree is refused).
-3. `npm run release -- patch` → bumps version, updates CHANGELOG.md, tags, pushes.
-4. GitHub Actions (`.github/workflows/release.yml`) builds Windows + Linux and
-   publishes the release only when both are done. Watch with `gh run watch`.
-5. Installed copies update themselves from GitHub Releases (electron-updater).
+3. `npm run release -- patch` → bumps version, updates CHANGELOG.md, tags, pushes,
+   resets `release-notes.md` to its template in a follow-up commit.
+4. GitHub Actions (`.github/workflows/release.yml`) builds Windows + Linux,
+   uploads to a draft release, and publishes it — with a "Downloads" table
+   prepended to the notes — only when both platforms are done. Watch with
+   `gh run list` / `gh run watch <id>`. `ci.yml` (`build.yml`) runs tests, the
+   smoke check and a no-publish packaging run on every push.
+5. Installed copies find the release via electron-updater (GitHub provider is
+   baked in by `build.publish` + `repository` in package.json).
 
-Never publish installers by hand; never edit `version` without going through
-the release script for a shipped build. Windows artefacts are
-`TwinLine-Installer-<v>.exe` / `TwinLine-Portable-<v>.exe`; the `.blockmap`
-and `.yml` assets are required by the updater — keep them.
-
-`TwinLine.exe --update-check=<feed>` is a *download-only* rehearsal. It once
-silently installed a throwaway build before the install-on-quit guard existed;
-the guard is in `runUpdateCheck`. Keep it.
+Rules:
+- Never publish installers by hand; never hand-edit `version` for a shipped build.
+- Windows artefacts are `TwinLine-Installer-<v>.exe` / `TwinLine-Portable-<v>.exe`
+  (set via `nsis.artifactName` / `portable.artifactName`). The `.blockmap` and
+  `.yml` assets are required by the updater — keep them; Mike asked and accepted.
+- `--update-check` once silently installed a throwaway build before the
+  install-on-quit guard existed (`updater.disableInstallOnQuit()` in
+  `runUpdateCheck`). Keep the guard. Never build a throwaway higher version
+  and point a real installed copy at it.
+- Bump the minor for features, patch for fixes. History: 1.0.0 first build →
+  1.0.1 legacy-hold fix → 1.0.2 tray icon → 1.0.3 network re-registration +
+  logging → 1.0.4 in-app updates → 1.1.0 transcription (Whisper) → 1.2.0
+  Parakeet engine, frameless window → 1.2.1 artefact names → 1.3.0 pop-out panels.
 
 ## Architecture in one breath
 
 Main process owns SIP (`src/main/sip`: hand-written parser, digest, SDP,
 UDP/TCP/TLS transports, RFC 3261 transactions, dialogs), RTP + G.711
 (`src/main/rtp`), the 20 ms audio clock and mix-minus conference bus
-(`src/main/media`), and transcription (`src/main/transcribe`, sherpa-onnx in a
-utility process). The renderer owns only the microphone/speaker (WebAudio at
-8 kHz) and the UI; `preload.js` is the sole bridge. `callmanager.js` is the
-source of truth for calls, hold and conference; the renderer just renders
-snapshots.
+(`src/main/media`), transcription (`src/main/transcribe`, sherpa-onnx in a
+utility process), updates (`updater.js`), contacts, settings, logging.
+The renderer owns only the microphone/speaker (WebAudio at 8 kHz) and the UI;
+`preload.js` is the sole bridge. `callmanager.js` is the source of truth for
+calls, hold and conference; every window just renders snapshots it is sent.
+
+Windows: main window (frameless, own title bar), incoming-call popup
+(`popup.html`, remembers position), and popped-out panels — the same
+`index.html` loaded with `?panel=settings|contacts|history|transcript|transcriptView|transfer`,
+which shows only that dialog (`panel-mode` CSS), makes no sound, and closes
+the window when the dialog hides (MutationObserver). `send()` in main.js
+broadcasts to all windows; only the speaker stream goes to the main window.
 
 ## Decisions that look odd but are deliberate
 
 - **Native SIP over UDP/TCP/TLS, not WebRTC/SIP.js** — providers have no
-  WebSocket gateway.
+  WebSocket gateway. Do not put this debate in the README; Mike found it noise.
 - **Conference is mixed locally** so one party can be dropped or held while
   the others continue. Membership is explicit state (`conferenceIds`), not
-  "whatever is bridged"; a held member stays a member and rejoins on Resume.
+  "whatever is bridged"; a held member stays a member and rejoins on Resume;
+  answering another call holds the whole conference as one unit.
 - **Hold**: we advertise `a=sendonly` and keep RTP flowing (silence) — the peer
   expects a stream and NAT bindings stay open. `a=sendonly` *from* the peer
-  means they hold us (they still send MoH). `c=IN IP4 0.0.0.0` is legacy hold,
-  never a destination (Vital sends it).
+  means they hold us (they may still send MoH; we keep receiving). Their
+  `a=recvonly` answer to our hold is compliance, not a hold. `c=IN IP4 0.0.0.0`
+  is legacy hold, never a destination (Vital sends it; caused `EADDRNOTAVAIL 0.0.0.0`).
 - **Sockets bind to 0.0.0.0**, never a specific IP: a bound IP that vanishes
-  (VPN, Wi-Fi roam, sleep) fails every send with `EADDRNOTAVAIL`. Lines
-  re-register on resume/unlock/online/socket error/route change.
+  (VPN, Wi-Fi roam, sleep, Docker's vEthernet) fails every send with
+  `EADDRNOTAVAIL <valid public ip>` — that was the "people stopped getting
+  calls" bug. Lines re-register on resume/unlock/online/socket error/route
+  change (`refreshNetwork`).
 - **Registration refresh does not show "registering"** — the old binding is
-  still valid; only a real failure changes the chip.
-- **Transcription channels**: microphone and each caller are separate
-  streams, so *You*/*Caller* labels need no diarisation. Default model is
-  Parakeet-TDT 0.6B v3 (fast, 25 languages, no language-detection step).
-  Whisper is kept but was slow and mislabelled Spanish as Portuguese/Hindi.
+  still valid; only a real failure changes the chip (it flickered amber before).
+- **Errors**: RTP send errors are reported once per code per 30 s; toasts
+  collapse repeats into "×N", max four. Never let a per-frame error toast.
+- **Transcription channels**: microphone and each caller are separate streams,
+  so *You*/*Caller* labels need no diarisation. Default model is Parakeet-TDT
+  0.6B v3 int8 (`nemo_transducer`, featureDim 128; ~130–260 ms per utterance
+  on a Ryzen 7 5800U). Whisper stays selectable but was 5–10 s per utterance
+  on Mike's i7 laptop and mislabelled Spanish as Portuguese/Hindi/Thai (its
+  encoder always processes 30 s; its language ID is unreliable on short 8 kHz
+  snippets). Saved Whisper picks migrate once (`config.js migrate()`).
 - **Electron forbids N-API external buffers**: sherpa-onnx's `resample()` and
-  `vad.front()` throw inside Electron but not in Node. Hence `Upsampler2x` in
-  `core.js` and `front(false)`. Always test speech *inside* Electron
-  (`--smoke-wav`), not just with `tools/transcribe-file.js`.
+  `vad.front()` throw `External buffers are not allowed` inside Electron but
+  not in Node — the worker caught it per frame and simply "heard nothing".
+  Hence `Upsampler2x` in `core.js` and `front(false)`. Always test speech
+  *inside* Electron (`--smoke-wav`), not only with `tools/transcribe-file.js`.
 - **asarUnpack** covers `sherpa-onnx-*` and `src/main/transcribe/**`; the
   worker and DLLs must be real files. `unpacked()` in `main.js` maps paths.
-- **Frameless window** with its own title bar; the incoming-call popup
-  remembers its position and can be reset from Settings.
-- **Portable exe** breaks if launched twice (electron-builder unpacks to one
-  temp folder per build); the installer is what users should run.
+  The worker gets PATH / LD_LIBRARY_PATH for the platform library dir.
+- **No consent tone** at transcription start — it existed in 1.1.0; Mike had it
+  removed. The README carries the legal note instead.
+- **Frameless main window** (Mike disliked the doubled title bar), own
+  minimise/maximise/close; double-click the bar to maximise.
+- **Portable exe** breaks if launched twice (electron-builder unpacks every
+  launch of one build to the same temp folder and deletes it on exit →
+  `ffmpeg.dll not found`). The installer is what users should run.
+- **Models** live in `<userData>/models/{parakeet-tdt-0.6b-v3,whisper-*,vad}`,
+  fetched file-by-file from Hugging Face (`csukuangfj/...`) so nothing needs
+  bzip2/tar. Never bundle them in the installer.
+- Passwords are encrypted with `safeStorage` (DPAPI on Windows), so a copied
+  `settings.json` does not carry them to another machine.
+
+## Open items and known gaps
+
+- One report (1.1.0, Whisper) of the user's own voice not appearing in a
+  transcript while the far end heard them; unreproduced. 1.2.0 logs per-channel
+  frame counters on `transcription finished` — ask for that log line first.
+- Spanish recognition is verified only by Parakeet's documentation; no Spanish
+  TTS voice exists on Mike's PC to synthesise a test. English is verified
+  end-to-end (Windows TTS sample through the 8 kHz µ-law path).
+- In a conference every remote party is labelled *Caller*; per-party labels
+  (by number/contact) would be a small follow-up.
+- Code signing: `release.yml` already reads `WIN_CSC_LINK` /
+  `WIN_CSC_KEY_PASSWORD` secrets; Mike may buy a certificate later.
+- Linux packages are built and inspected (deb/rpm metadata, desktop entry with
+  sip:/tel: handlers) but have never been run by a user.
+- Codecs are G.711 only; media is plain RTP; no ICE/STUN. Known and accepted.
+
+## Mike's preferences (learned)
+
+- Short, user-facing README; engineering detail goes here or in code comments.
+- Wants to *test on a real call* after each change; tell him exactly what to
+  try. He tests from a remote-desktop session and on a second laptop.
+- Prefers being told the honest state ("verified on loopback, not on Vital")
+  over reassurance. Reports bugs with screenshots; give root causes.
+- Likes things automated: releases, updates, CI. Asked for update-download
+  buttons inside Settings, popup position reset, pop-out dialogs.
+
+## Machine notes (Mike's Windows PC, 2026-09)
+
+- Electron cannot start from Claude's scratch workspace (UWP LocalCache path →
+  V8 snapshot error); work in `C:\Users\Support\Downloads\twinline`.
+- Windows Developer Mode is on, so plain `electron-builder --win` works; before
+  that the winCodeSign bundle's macOS symlinks failed (`dist:win:noedit` avoids it).
+- Docker Desktop is installed but usually needs starting
+  (`Start-Process "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"`, ~20 s).
+- `gh` is installed per-user at `%LOCALAPPDATA%\Programs\gh\bin` (on the user
+  PATH; Bash sessions need `export PATH="$PATH:$LOCALAPPDATA/Programs/gh/bin"`),
+  authenticated as `gxmonto`.
+- Installing into `C:\Program Files` needs a UAC prompt Claude cannot answer;
+  ask Mike to run installers. His PC once ended up with a bogus "1.0.5" from
+  the updater accident; he was told to reinstall from GitHub.
+- Windows TTS voices available: David, Zira (en-US) — used for speech tests via
+  `System.Speech` → 16 kHz WAV.
 
 ## Testing expectations
 
 - Loopback tests (`test/integration.test.js`) run two real user agents against
-  each other with real RTP — extend them for any SIP/media change.
+  each other with real RTP — extend them for any SIP/media change. The
+  transcription pipeline has fake-sherpa tests (`test/transcribe.test.js`) and
+  fake-worker plumbing tests (`test/service.test.js`).
 - Provider behaviour cannot be simulated; when a fix targets JetWave/Vital,
   say so and ask Mike to verify on a real call. The log
   (`Settings → General → Open log folder`, optional SIP trace) is the evidence
   to ask for.
-- Keep `README.md` short and user-facing; put engineering detail here or in
-  code comments.
 
 ## Conventions
 
-- Comments explain *why*, not what. Match the existing plain-JS style.
+- Comments explain *why*, not what. Match the existing plain-JS style; no
+  frameworks, no bundler, no TypeScript.
 - Commit messages end with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`.
 - Settings live in `%APPDATA%\TwinLine` (Linux `~/.config/TwinLine`): settings.json,
-  contacts.json, logs/, models/, transcripts/. Passwords are encrypted via
-  safeStorage. Nothing user-specific is in the repo.
+  contacts.json, logs/, models/, transcripts/. Nothing user-specific is in the repo.
+- The `homepage`/`repository` fields point at github.com/gxmonto/twinline;
+  deb/rpm require a homepage.

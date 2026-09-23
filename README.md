@@ -46,6 +46,25 @@ override** if your provider does not echo `rport`.
 - **Transfer**: blind to a number, or attended to another call in progress.
 - **Hold music** is whatever your PBX or provider plays; TwinLine itself sends
   silence to a held party.
+- **Pop out**: the ⧉ button on Settings, Contacts, History, a transcript or
+  the Transfer dialog opens it as its own window you can move anywhere —
+  handy for keeping the live transcript beside another app during a call.
+
+## Codecs
+
+TwinLine speaks **G.711**, the codec every SIP provider and PBX supports:
+
+- **PCMU (µ-law)** and **PCMA (A-law)** are the two flavours; µ-law is the
+  norm in North America and Japan, A-law elsewhere. Both are 8 kHz, 64 kbit/s
+  — ordinary landline quality. A provider usually accepts either; the *Codec
+  preference* per line decides which TwinLine offers first.
+- **DTMF** (keypad tones during a call) is sent as RFC 4733 events inside the
+  audio stream, which is what nearly every provider expects. Switch a line to
+  *SIP INFO* only if your provider asks for it.
+- There is no wideband codec (G.722, Opus): phone networks downmix to 8 kHz
+  anyway, and G.711 needs no licence and no negotiation surprises. It also
+  means the transcription engine only ever sees telephone-band audio, which
+  the Parakeet model handles well.
 
 ## Transcription
 

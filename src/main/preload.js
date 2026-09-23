@@ -123,6 +123,8 @@ contextBridge.exposeInMainWorld('twinline', {
     minimise: () => ipcRenderer.send('window:minimise'),
     maximise: () => ipcRenderer.send('window:maximise'),
     close: () => ipcRenderer.send('window:close'),
+    /** Open a dialog (settings, contacts, history, transcript, transcriptView, transfer) as its own window. */
+    openPanel: (name, params) => call('window:openPanel', { name, params }),
   },
 
   on: {
@@ -148,5 +150,7 @@ contextBridge.exposeInMainWorld('twinline', {
     modelsProgress: (fn) => on('models:progress', fn),
     modelsStatus: (fn) => on('models:status', fn),
     windowState: (fn) => on('window:state', fn),
+    settings: (fn) => on('settings', fn),
+    contactsChanged: (fn) => on('contacts:changed', fn),
   },
 });
