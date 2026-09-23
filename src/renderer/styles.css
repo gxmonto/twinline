@@ -40,12 +40,22 @@ input, select { font: inherit; }
   display: flex;
   align-items: center;
   gap: 10px;
+  height: 42px;
+  box-sizing: border-box;
   padding: 8px 8px 8px 12px;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   flex: 0 0 auto;
 }
+
+/* Native caption buttons (Window Controls Overlay) sit over the right end of
+   the bar: keep our content out from under them and drop our own copies. */
+body.wco .titlebar { width: env(titlebar-area-width, 100%); }
+body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none; }
+
+/* Anything clickable in the bar must opt out of the drag region itself. */
+.titlebar button, .titlebar select, .titlebar input, .titlebar .line-chip { -webkit-app-region: no-drag; }
 
 .brand { display: flex; align-items: center; gap: 7px; }
 
@@ -284,6 +294,14 @@ input, select { font: inherit; }
 .transcript-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .transcript h2 { margin: 0; font-size: 13px; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .transcript-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+
+.pill.countdown {
+  background: rgba(224, 163, 62, 0.22);
+  color: var(--amber);
+  font-weight: 600;
+  animation: pulse 1s infinite;
+}
+.pill.countdown.hidden { display: none; }
 
 .speaking {
   padding: 1px 7px;

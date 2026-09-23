@@ -74,6 +74,9 @@ contextBridge.exposeInMainWorld('twinline', {
 
   popup: {
     resetPosition: () => call('popup:reset'),
+    /** Popup window only: move to screen coordinates while the grip is dragged. */
+    move: (x, y) => ipcRenderer.send('popup:move', { x, y }),
+    dismiss: () => ipcRenderer.send('popup:dismiss'),
   },
 
   log: {

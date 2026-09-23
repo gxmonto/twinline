@@ -28,11 +28,25 @@ body { border: 1px solid var(--border); }
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 14px;
+  padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  cursor: move;
+  cursor: grab;
+  user-select: none;
 }
+.grip.dragging { cursor: grabbing; }
+
+.dismiss {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  padding: 0;
+  margin-left: 4px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 400;
+}
+.dismiss:hover { background: #262d3b; color: var(--text); }
 
 .logo {
   width: 12px; height: 12px;

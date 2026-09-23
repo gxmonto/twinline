@@ -38,6 +38,12 @@ const TRAY_ICON = process.platform === 'win32'
 let mainWindow = null;
 let popupWindow = null;
 let trayIconLoaded = false;
+
+// Title bar: our HTML bar underneath, native minimise/maximise/close on top.
+const TITLE_BAR_HEIGHT = 42;
+const TITLE_BAR = process.platform === 'darwin'
+  ? { titleBarStyle: 'hiddenInset' }
+  : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#1a1f29', symbolColor: '#e6eaf2', height: TITLE_BAR_HEIGHT } };
 let tray = null;
 let settings = null;
 let contacts = null;
@@ -82,9 +88,11 @@ function createWindow() {
     minWidth: 380,
     minHeight: 560,
     show: false,
-    // The page draws its own title bar (drag region, minimise, maximise,
-    // close), so the OS frame would be a second, redundant one.
-    frame: false,
+    // The page draws the title bar; the OS draws the caption buttons over it
+    // (Window Controls Overlay). OS-drawn buttons are hit-tested by the OS,
+    // so they cannot end up with dead zones the way CSS drag regions can on
+    // scaled displays.
+    ...TITLE_BAR,
     backgroundColor: '#12151c',
     title: 'TwinLine',
     icon: WINDOW_ICON,
@@ -192,7 +200,20 @@ async function runSmokeTest() {
       settingsShown: !document.getElementById('settingsOverlay').classList.contains('hidden'),
       dialerHidden: getComputedStyle(document.querySelector('.dialer')).display === 'none',
       title: document.querySelector('.titlebar .name').textContent,
+      nativeControls: document.body.classList.contains('wco'),
     }))()`);
+    // Nothing may sit on top of the dialog's close button or the dialler.
+    report.hits = await mainWindow.webContents.executeJavaScript(`(() => {
+      const hit = (id) => { const el = document.getElementById(id); if (!el || !el.offsetParent && el.tagName !== 'BODY') return 'hidden';
+        const r = el.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return top === el || (top && el.contains(top)) ? 'ok' : (top ? top.id || top.className || top.tagName : 'none'); };
+      return { dialInput: hit('dialInput'), btnDial: hit('btnDial'), btnSettings: hit('btnSettings'), keypad5: (() => {
+        const el = document.querySelector('#keypad button[data-digit="5"]'); const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el.contains(top) ? 'ok' : (top && (top.id || top.className)); })() };
+    })()`);
+    for (const [name, result] of Object.entries(report.hits)) {
+      if (result !== 'ok') problems.push(`${name} is covered by ${result}`);
+    }
     panel.close();
     if (!report.panel.panelMode || !report.panel.settingsShown || !report.panel.dialerHidden) {
       problems.push(`popped-out settings panel did not render as a panel: ${JSON.stringify(report.panel)}`);
@@ -298,8 +319,13 @@ function createPopup(height) {
   popupWindow.webContents.on('did-finish-load', () => pushPopupCalls());
 }
 
+/** Calls whose popup the user dismissed with ✕; forgotten once they stop ringing. */
+const popupDismissed = new Set();
+
 function incomingCalls() {
-  return manager ? manager.snapshot().calls.filter((c) => c.state === 'incoming') : [];
+  const ringing = manager ? manager.snapshot().calls.filter((c) => c.state === 'incoming') : [];
+  for (const id of [...popupDismissed]) if (!ringing.some((c) => c.id === id)) popupDismissed.delete(id);
+  return ringing.filter((c) => !popupDismissed.has(c.id));
 }
 
 function pushPopupCalls() {
@@ -467,7 +493,7 @@ function openPanel(name, params = {}) {
     minHeight: 260,
     x: anchor ? anchor.x + anchor.width + 12 : undefined,
     y: anchor ? anchor.y : undefined,
-    frame: false,
+    ...TITLE_BAR,
     show: false,
     backgroundColor: '#1a1f29',
     title: `TwinLine — ${name}`,
@@ -676,6 +702,8 @@ function registerIpc() {
     // the UI something a person would say.
     platformLabel: `${{ win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[process.platform] || process.platform} ${{ x64: '64-bit', arm64: 'ARM 64-bit', ia32: '32-bit' }[process.arch] || process.arch}`,
     electron: process.versions.electron,
+    windowControls: 'native',             // the OS draws min/max/close; the page must not
+    titleBarHeight: TITLE_BAR_HEIGHT,
     encryptionAvailable: settings.encryptionAvailable,
   }));
 
@@ -774,6 +802,19 @@ function registerIpc() {
   });
   ipcMain.on('window:close', (event) => senderWindow(event)?.close());
   handle('window:openPanel', ({ name, params }) => openPanel(name, params || {}));
+
+  // The incoming-call popup drags itself: it has no OS frame and no CSS drag
+  // region (those develop dead zones on scaled displays), so the page reports
+  // where the grip was dragged to and we move the window.
+  ipcMain.on('popup:move', (event, { x, y }) => {
+    const win = senderWindow(event);
+    if (win && win === popupWindow && Number.isFinite(x) && Number.isFinite(y)) win.setPosition(Math.round(x), Math.round(y), false);
+  });
+  ipcMain.on('popup:dismiss', () => {
+    // Hide the popup for the calls ringing now; the main window keeps ringing.
+    for (const c of incomingCalls()) popupDismissed.add(c.id);
+    updatePopup();
+  });
 }
 
 // ---- lifecycle -------------------------------------------------------------

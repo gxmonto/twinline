@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+Small fixes: the transcript countdown now shows in the panel header ("Closing in 5 s", with Keep open next to it); minimise, maximise and close are drawn by Windows itself so they always respond; the incoming-call popup drags smoothly from its top bar with no dead spots and has a ✕ to hide it while the call keeps ringing in the main window; the Settings version line says "Windows 64-bit" instead of win32.
