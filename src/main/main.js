@@ -671,6 +671,11 @@ function registerIpc() {
   handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,
+    arch: process.arch,
+    // `process.platform` says "win32" on every Windows, 64-bit included; give
+    // the UI something a person would say.
+    platformLabel: `${{ win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[process.platform] || process.platform} ${{ x64: '64-bit', arm64: 'ARM 64-bit', ia32: '32-bit' }[process.arch] || process.arch}`,
+    electron: process.versions.electron,
     encryptionAvailable: settings.encryptionAvailable,
   }));
 

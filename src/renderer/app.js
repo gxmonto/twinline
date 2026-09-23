@@ -802,7 +802,7 @@ function renderSettingsGeneral() {
     ? 'Passwords are encrypted at rest using your operating system keyring.'
     : 'No OS keyring is available, so passwords are stored in a file readable only by your user account.';
   $('encryptionHint').classList.toggle('warn', !appInfo.encryptionAvailable);
-  $('versionHint').textContent = `TwinLine ${appInfo.version} on ${appInfo.platform}`;
+  $('versionHint').textContent = `TwinLine ${appInfo.version} · ${appInfo.platformLabel || appInfo.platform}${appInfo.electron ? ` · Electron ${appInfo.electron}` : ''}`;
 }
 
 async function saveSettings() {
