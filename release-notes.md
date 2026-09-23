@@ -1,3 +1,1 @@
-Transcription is much faster and more accurate. The new default engine, Parakeet, recognises an utterance in a fraction of a second, handles English and Spanish (and 23 other languages) without guessing the language first, and adds punctuation. Download it once in Settings → Transcription (~670 MB); anyone on a Whisper model is moved to it automatically. The start-of-transcription tone is gone.
-
-Also: the update dialog now has Download and Restart buttons right in Settings, the duplicate Windows title bar is gone (drag the TwinLine bar, double-click to maximise), and the log records how much audio from each side reached the transcription engine.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
