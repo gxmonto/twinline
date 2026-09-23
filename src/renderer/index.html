@@ -19,6 +19,7 @@
       <button class="icon-btn" id="btnHistory" title="Call history" aria-label="Call history">&#9201;</button>
       <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">&#9881;</button>
       <button class="icon-btn" id="btnMinimise" title="Minimise" aria-label="Minimise">&#8211;</button>
+      <button class="icon-btn" id="btnMaximise" title="Maximise" aria-label="Maximise">&#9633;</button>
       <button class="icon-btn danger" id="btnClose" title="Close" aria-label="Close">&#10005;</button>
     </div>
   </header>
@@ -115,19 +116,18 @@
             <select id="trModel"></select>
           </label>
           <div id="trModelRows" class="model-rows"></div>
-          <label class="field">
-            <span>Language</span>
+          <label class="field" id="trLanguageField">
+            <span>Language <em id="trLanguageHint"></em></span>
             <select id="trLanguage">
-              <option value="auto">Detect automatically (English, Spanish, …)</option>
+              <option value="auto">Detect automatically</option>
               <option value="en">English only</option>
               <option value="es">Spanish only</option>
             </select>
           </label>
           <label class="check"><input type="checkbox" id="trAutoStart"> Transcribe every call automatically</label>
-          <label class="check"><input type="checkbox" id="trConsentTone"> Play a short tone to both parties when transcription starts</label>
           <label class="field">
-            <span>CPU threads for recognition</span>
-            <input type="number" id="trThreads" min="1" max="16">
+            <span>CPU threads for recognition <em>(blank = automatic)</em></span>
+            <input type="number" id="trThreads" min="1" max="16" placeholder="auto">
           </label>
           <label class="field">
             <span>&nbsp;</span>
@@ -217,7 +217,7 @@
           </label>
           <label class="field">
             <span>&nbsp;</span>
-            <span class="row">
+            <span class="row" id="updateActions">
               <button type="button" class="btn small" id="btnCheckUpdates">Check for updates now</button>
             </span>
           </label>

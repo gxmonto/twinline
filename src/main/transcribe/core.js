@@ -72,9 +72,20 @@ class Transcriber {
   }
 
   async init() {
-    this.recognizer = await this.sherpa.OfflineRecognizer.createAsync({
-      featConfig: { sampleRate: TARGET_RATE, featureDim: 80 },
-      modelConfig: {
+    const common = { tokens: this.model.tokens, numThreads: this.threads, provider: 'cpu', debug: 0 };
+    let modelConfig;
+    if (this.model.type === 'nemo_transducer') {
+      // Parakeet-TDT: one model for 25 languages, no separate language
+      // detection step — which is what makes it steady on short phone
+      // utterances where Whisper's detector wanders.
+      modelConfig = {
+        ...common,
+        transducer: { encoder: this.model.encoder, decoder: this.model.decoder, joiner: this.model.joiner },
+        modelType: 'nemo_transducer',
+      };
+    } else {
+      modelConfig = {
+        ...common,
         whisper: {
           encoder: this.model.encoder,
           decoder: this.model.decoder,
@@ -82,12 +93,12 @@ class Transcriber {
           task: 'transcribe',
           tailPaddings: -1,
         },
-        tokens: this.model.tokens,
-        numThreads: this.threads,
-        provider: 'cpu',
-        debug: 0,
         modelType: 'whisper',
-      },
+      };
+    }
+    this.recognizer = await this.sherpa.OfflineRecognizer.createAsync({
+      featConfig: { sampleRate: TARGET_RATE, featureDim: this.model.type === 'nemo_transducer' ? 128 : 80 },
+      modelConfig,
     });
     return this;
   }

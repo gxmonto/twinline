@@ -92,9 +92,17 @@ function wireEvents() {
   api.on.dtmf(({ digit }) => toast(`Received DTMF: ${digit}`));
   api.on.message(({ from, body }) => toast(`Message from ${from}: ${body}`.slice(0, 160)));
 
-  // Title bar
+  // Title bar (the window is frameless; this bar is the only one)
   $('btnMinimise').onclick = () => api.window.minimise();
+  $('btnMaximise').onclick = () => api.window.maximise();
   $('btnClose').onclick = () => api.window.close();
+  document.querySelector('.titlebar').addEventListener('dblclick', (e) => {
+    if (!e.target.closest('button, select, input')) api.window.maximise();
+  });
+  api.on.windowState(({ maximized }) => {
+    $('btnMaximise').innerHTML = maximized ? '&#10697;' : '&#9633;';
+    $('btnMaximise').title = maximized ? 'Restore' : 'Maximise';
+  });
   $('btnSettings').onclick = openSettings;
   $('btnHistory').onclick = openHistory;
   $('btnContacts').onclick = openContacts;
@@ -135,16 +143,10 @@ function wireEvents() {
   $('btnTranscriptViewFolder').onclick = () => guard(api.transcribe.openFolder());
   $('btnTranscriptViewDelete').onclick = deleteViewedTranscript;
   $('btnTranscriptsFolder').onclick = () => guard(api.transcribe.openFolder());
-  $('trModel').addEventListener('change', renderModelRows);
 
-  // Updates
+  // Updates (the Check button is wired inside renderUpdate, which re-renders it)
   api.on.update(renderUpdate);
   api.updates.status().then(renderUpdate).catch(() => {});
-  $('btnCheckUpdates').onclick = async () => {
-    $('updateStatus').textContent = 'Checking…';
-    const status = await guard(api.updates.check());
-    if (status) renderUpdate(status);
-  };
   $('btnSettingsClose').onclick = closeSettings;
   $('btnSettingsCancel').onclick = closeSettings;
   $('btnSettingsSave').onclick = saveSettings;
@@ -747,8 +749,8 @@ async function saveSettings() {
     model: $('trModel').value || 'small',
     language: $('trLanguage').value,
     autoStart: $('trAutoStart').checked,
-    consentTone: $('trConsentTone').checked,
-    threads: Math.max(1, Math.min(16, Number($('trThreads').value) || 4)),
+    threads: $('trThreads').value ? Math.max(1, Math.min(16, Number($('trThreads').value) || 0)) : 0,
+    catalogVersion: (settings.transcription && settings.transcription.catalogVersion) || 0,
   };
 
   const saved = await guard(api.settings.save(next));
@@ -822,7 +824,7 @@ function renderTranscript() {
 
   $('transcriptFoot').textContent = record.finished
     ? (record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}` : 'Finished; nothing to save.')
-    : 'Recognition runs on this computer. Both parties heard a tone when it started.'.replace(' Both parties heard a tone when it started.', settings.transcription && settings.transcription.consentTone ? ' Both parties heard a tone when it started.' : '');
+    : 'Recognition runs on this computer.';
   renderSpeaking(record);
 }
 
@@ -896,9 +898,10 @@ async function renderSettingsTranscription() {
   select.value = current;
   $('trLanguage').value = t.language || 'auto';
   $('trAutoStart').checked = !!t.autoStart;
-  $('trConsentTone').checked = t.consentTone !== false;
-  $('trThreads').value = t.threads || 4;
+  $('trThreads').value = t.threads > 0 ? t.threads : '';
   renderModelRows();
+  renderLanguageField();
+  select.onchange = () => { renderModelRows(); renderLanguageField(); };
 
   if (status) {
     $('trStatus').textContent = {
@@ -909,6 +912,15 @@ async function renderSettingsTranscription() {
     }[status.state] || '';
     $('trStatus').classList.toggle('warn', status.state === 'error');
   }
+}
+
+/** Parakeet recognises 25 languages in one pass; the pin-a-language option only means something for Whisper. */
+function renderLanguageField() {
+  if (!modelsStatus) return;
+  const chosen = modelsStatus.models.find((m) => m.id === $('trModel').value);
+  const whisper = chosen && chosen.type === 'whisper';
+  $('trLanguage').disabled = !whisper;
+  $('trLanguageHint').textContent = whisper ? '' : '(handled automatically by this model)';
 }
 
 function renderModelRows() {
@@ -996,6 +1008,23 @@ function renderUpdate(status) {
   banner.className = `update-banner ${cls} ${html ? '' : 'hidden'}`.trim();
   banner.innerHTML = html || '';
   for (const b of banner.querySelectorAll('button[data-update]')) b.onclick = () => onUpdateAction(b.dataset.update);
+
+  // The same actions inside Settings, so "check → download → restart" never
+  // requires closing the dialog to reach the banner.
+  const actions = $('updateActions');
+  if (actions) {
+    let extra = '';
+    if (status.state === 'available') extra = button('download', status.manualDownloadUrl ? 'Download page' : `Download ${v}`, 'btn primary small');
+    else if (status.state === 'downloaded') extra = button('install', `Restart and install ${v}`, 'btn primary small');
+    else if (status.state === 'downloading') extra = `<span class="bar" style="width:120px;height:6px;border-radius:3px;background:var(--bg-input);overflow:hidden;display:inline-block;vertical-align:middle"><span style="display:block;height:100%;width:${Math.round((status.progress && status.progress.percent) || 0)}%;background:var(--accent)"></span></span>`;
+    actions.innerHTML = `<button type="button" class="btn small" id="btnCheckUpdates" ${status.state === 'checking' ? 'disabled' : ''}>Check for updates now</button>${extra}`;
+    $('btnCheckUpdates').onclick = async () => {
+      $('updateStatus').textContent = 'Checking…';
+      const s = await guard(api.updates.check());
+      if (s) renderUpdate(s);
+    };
+    for (const b of actions.querySelectorAll('button[data-update]')) b.onclick = () => onUpdateAction(b.dataset.update);
+  }
 
   if (settingsLine) {
     const when = status.lastCheck ? ` Last checked ${new Date(status.lastCheck).toLocaleTimeString()}.` : '';
