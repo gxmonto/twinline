@@ -249,6 +249,10 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 
 ## Testing expectations
 
+- CI's smoke step runs on a slow shared runner: anything it checks that
+  depends on the page having *done* something (opened a dialog, set a title)
+  must poll with a deadline, never a fixed delay — a fixed 800 ms panel wait
+  failed roughly one CI run in four and mailed Mike "run failed" each time.
 - Loopback tests (`test/integration.test.js`) run two real user agents against
   each other with real RTP — extend them for any SIP/media change. The
   transcription pipeline has fake-sherpa tests (`test/transcribe.test.js`) and

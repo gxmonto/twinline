@@ -195,14 +195,21 @@ async function runSmokeTest() {
       panel.webContents.once('did-finish-load', resolve);
       setTimeout(() => reject(new Error('panel load timed out')), 15000);
     });
-    await new Promise((r) => setTimeout(r, 800));
-    report.panel = await panel.webContents.executeJavaScript(`(() => ({
+    // The panel page opens its dialog only after it has fetched the settings
+    // over IPC; on a slow shared CI runner that can take seconds, so poll for
+    // it rather than guess a delay (a fixed 800 ms made CI fail one run in four).
+    const probePanel = () => panel.webContents.executeJavaScript(`(() => ({
       panelMode: document.body.classList.contains('panel-mode'),
       settingsShown: !document.getElementById('settingsOverlay').classList.contains('hidden'),
       dialerHidden: getComputedStyle(document.querySelector('.dialer')).display === 'none',
       title: document.querySelector('.titlebar .name').textContent,
       nativeControls: document.body.classList.contains('wco'),
     }))()`);
+    const panelDeadline = Date.now() + 15000;
+    do {
+      await new Promise((r) => setTimeout(r, 250));
+      report.panel = await probePanel();
+    } while (!report.panel.settingsShown && Date.now() < panelDeadline);
     // Nothing may sit on top of the dialog's close button or the dialler.
     report.hits = await mainWindow.webContents.executeJavaScript(`(() => {
       const hit = (id) => { const el = document.getElementById(id); if (!el || !el.offsetParent && el.tagName !== 'BODY') return 'hidden';
