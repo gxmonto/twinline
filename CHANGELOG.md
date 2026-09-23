@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 — 2026-09-23
+
+Every dialog can now live in its own window. Press the ⧉ button on Settings, Contacts, History, a transcript or the Transfer dialog and it pops out as a separate window you can move anywhere on screen — for example the live transcript next to your notes during a call. Changes made in a popped-out window apply everywhere.
+
 ## 1.2.1 — 2026-09-23
 
 Clearer downloads: the Windows files are now named TwinLine-Installer and TwinLine-Portable, and each release page starts with a table saying which file to pick. The .yml and .blockmap files stay — the built-in updater reads them to download only what changed.
