@@ -1,1 +1,1 @@
-Every dialog can now live in its own window. Press the ⧉ button on Settings, Contacts, History, a transcript or the Transfer dialog and it pops out as a separate window you can move anywhere on screen — for example the live transcript next to your notes during a call. Changes made in a popped-out window apply everywhere.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
