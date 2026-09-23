@@ -569,7 +569,9 @@ class UserAgent extends EventEmitter {
    */
   acceptsSource(address) {
     if (!this.config.acceptFromServerOnly || !this.config.register) return true;
-    if (!this.target) return true;
+    // Until the registrar is resolved nothing legitimate can reach us, so
+    // the filter is closed, not open, during start-up.
+    if (!this.target) return false;
     return this.targets.some((t) => t.address === address) || address === this.target.address;
   }
 

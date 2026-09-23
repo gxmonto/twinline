@@ -97,11 +97,22 @@ const info = (scope, msg, data) => log('info', scope, msg, data);
 const warn = (scope, msg, data) => log('warn', scope, msg, data);
 const error = (scope, msg, data) => log('error', scope, msg, data);
 
+/**
+ * Blank the parts of a SIP message that would let a reader of the log answer
+ * the server's challenge: the digest response and the nonces it was computed
+ * over. Username and realm stay — they are what the trace is usually read
+ * for. Header names are matched case-insensitively.
+ */
+function redactSip(text) {
+  return String(text).replace(/^((?:Proxy-)?Authorization|WWW-Authenticate|Proxy-Authenticate|Authentication-Info):(.*)$/gim,
+    (_, name, value) => `${name}:${value.replace(/\b(response|c?nonce|rspauth)=("?)[^",\s]*\2/gi, '$1=$2[redacted]$2')}`);
+}
+
 /** Record one SIP message when tracing is on. */
 function sip(scope, direction, text, peer) {
   if (!state.traceSip) return;
   const where = peer ? `${peer.address}:${peer.port}` : '';
-  write(format('debug', scope, `${direction} ${where}\n${String(text).replace(/\r\n/g, '\n').trimEnd()}`));
+  write(format('debug', scope, `${direction} ${where}\n${redactSip(text).replace(/\r\n/g, '\n').trimEnd()}`));
 }
 
 function child(scope) {
@@ -116,7 +127,7 @@ function child(scope) {
 }
 
 module.exports = {
-  init, setLevel, setTraceSip, child, debug, info, warn, error, sip,
+  init, setLevel, setTraceSip, child, debug, info, warn, error, sip, redactSip,
   get dir() { return state.dir; },
   get file() { return state.file; },
   get traceSip() { return state.traceSip; },

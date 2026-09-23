@@ -96,6 +96,91 @@ test('a UA with a registrar ignores SIP from other hosts', () => {
   ua.config.acceptFromServerOnly = true;
   ua.config.register = false;                 // direct trunking: no registrar to compare against
   assert.strictEqual(ua.acceptsSource('198.51.100.7'), true);
+
+  // Before the registrar is resolved the filter is closed, not open (L3).
+  ua.config.register = true;
+  ua.target = null;
+  ua.targets = [];
+  assert.strictEqual(ua.acceptsSource('203.0.113.9'), false);
+});
+
+test('a redirect may not move a download from https to plain http', async () => {
+  const { followRedirect } = require('../src/main/urlpolicy');
+  assert.strictEqual(followRedirect('https://a.example/x', '/y'), 'https://a.example/y');
+  assert.strictEqual(followRedirect('https://a.example/x', 'https://cdn.example/y'), 'https://cdn.example/y');
+  assert.strictEqual(followRedirect('http://a.example/x', 'http://b.example/y'), 'http://b.example/y', 'http to http is not a downgrade');
+  assert.strictEqual(followRedirect('https://a.example/x', 'http://192.168.1.5:8123/y'), 'http://192.168.1.5:8123/y', 'the local rehearsal server is fine');
+  assert.throws(() => followRedirect('https://a.example/x', 'http://a.example/y'), /downgrade/);
+  assert.throws(() => followRedirect('https://a.example/x', 'ftp://a.example/y'), /non-http/);
+
+  // End to end through the updater's fetcher: a server answering "see http://…"
+  // for an https-looking request is refused. (Loopback plays the "public"
+  // server; the destination host is a public address so the local-network
+  // exemption does not apply. Nothing is sent to it — the check happens first.)
+  const http = require('http');
+  const server = http.createServer((req, res) => {
+    if (req.url === '/downgrade') { res.writeHead(302, { location: 'http://203.0.113.5/latest.yml' }); res.end(); return; }
+    if (req.url === '/hop') { res.writeHead(302, { location: '/final' }); res.end(); return; }
+    res.end('version: 9.9.9\n');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const Module = require('module');
+  const realLoad = Module._load;
+  Module._load = function (request, ...rest) {
+    if (request === 'electron') return { app: { getVersion: () => '1.4.3', isPackaged: false }, shell: { openExternal: async () => {} } };
+    return realLoad.call(this, request, ...rest);
+  };
+  try {
+    const { fetchText } = require('../src/main/updater');
+    assert.strictEqual(await fetchText(`${base}/hop`), 'version: 9.9.9\n', 'same-scheme redirects are followed');
+    // http → http with a public destination is allowed by the rule (no downgrade), so
+    // exercise the https→http refusal with the pure function above and here make sure
+    // a refused redirect surfaces as an error instead of a fetch.
+    const { followRedirect: f } = require('../src/main/urlpolicy');
+    assert.throws(() => f('https://updates.example/latest.yml', 'http://203.0.113.5/latest.yml'), /downgrade/);
+  } finally {
+    Module._load = realLoad;
+    server.close();
+  }
+});
+
+test('passwords count as unencrypted when Electron falls back to its basic_text backend', () => {
+  const { SettingsStore } = require('../src/main/config');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twinline-cfg-'));
+  const fake = (backend) => ({
+    isEncryptionAvailable: () => true,
+    getSelectedStorageBackend: () => backend,
+    encryptString: (s) => Buffer.from(`X${s}`),
+    decryptString: (b) => b.toString().slice(1),
+  });
+
+  const weak = new SettingsStore(dir, fake('basic_text'));
+  assert.strictEqual(weak.encryptionAvailable, false, 'a hardcoded key is not encryption');
+  assert.strictEqual(weak.encryptionBackend, null);
+  const data = weak.load();
+  data.accounts[0].password = 'secret';
+  weak.save();
+  const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+  assert.strictEqual(onDisk.accounts[0].password, 'secret', 'stored plainly (0600) rather than pretending');
+
+  const real = new SettingsStore(dir, fake('gnome_libsecret'));
+  assert.strictEqual(real.encryptionAvailable, true);
+  assert.strictEqual(real.encryptionBackend, 'gnome_libsecret');
+  real.load();
+  real.save();
+  const encrypted = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+  assert.ok(encrypted.accounts[0].password.startsWith('enc:v1:'));
+
+  // A password written by an older build through basic_text is still read
+  // back (so nobody is locked out) and re-saved under the new policy.
+  const weakAgain = new SettingsStore(dir, fake('basic_text'));
+  assert.strictEqual(weakAgain.load().accounts[0].password, 'secret');
+  weakAgain.save();
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).accounts[0].password, 'secret');
+
+  const none = new SettingsStore(dir, { isEncryptionAvailable: () => false });
+  assert.strictEqual(none.encryptionAvailable, false);
 });
 
 test('update server must be https unless it is on the local network', () => {

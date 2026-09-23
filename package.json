@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "electron": "^44.4.5",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.twinline.softphone",
@@ -100,12 +100,14 @@
       "maintainer": "TwinLine <support@twinline.local>",
       "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
       "desktop": {
-        "Name": "TwinLine",
-        "GenericName": "Softphone",
-        "Comment": "Dual-line SIP softphone",
-        "Categories": "Network;Telephony;",
-        "Keywords": "sip;voip;softphone;telephone;pbx;",
-        "MimeType": "x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;"
+        "entry": {
+          "Name": "TwinLine",
+          "GenericName": "Softphone",
+          "Comment": "Dual-line SIP softphone",
+          "Categories": "Network;Telephony;",
+          "Keywords": "sip;voip;softphone;telephone;pbx;",
+          "MimeType": "x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;"
+        }
       }
     },
     "deb": {
@@ -142,7 +144,8 @@
       "src/main/transcribe/**"
     ],
     "portable": {
-      "artifactName": "TwinLine-Portable-${version}.exe"
+      "artifactName": "TwinLine-Portable-${version}.exe",
+      "unpackDirName": true
     }
   },
   "dependencies": {

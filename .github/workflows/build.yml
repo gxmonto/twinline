@@ -16,6 +16,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # Dependency currency: anything that ships must be clean (hard failure);
+      # the build toolchain is audited too, as a warning that shows on the run.
+      - name: Audit shipped dependencies
+        run: npm audit --omit=dev
+      - name: Audit build toolchain
+        run: npm audit || echo "::warning title=Build toolchain advisories::npm audit found advisories in the dev dependency tree. Run 'npm audit' locally and bump the toolchain."
       - run: npm test
       # The smoke test boots a real Electron window, so it needs a display.
       # --no-sandbox: the SUID sandbox helper cannot be made setuid on a hosted runner.

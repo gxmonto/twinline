@@ -54,7 +54,9 @@ Rules:
   Parakeet engine, frameless window → 1.2.1 artefact names → 1.3.0 pop-out panels →
   1.4.0 security review, Electron 44, conference-wide transcription, call-waiting
   tone, transcript auto-close → 1.4.1 native caption buttons, popup manual drag →
-  1.4.2 hosted-conference detection, voice separation, 302 redirect.
+  1.4.2 hosted-conference detection, voice separation, 302 redirect → 1.4.3
+  security-audit fixes (electron-builder 26, keyring honesty, redirect rule,
+  IPC sender check, trace masking, SHA256SUMS).
 
 ## Architecture in one breath
 
@@ -139,14 +141,23 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   removed. The README carries the legal note instead.
 - **Frameless main window** (Mike disliked the doubled title bar), own
   minimise/maximise/close; double-click the bar to maximise.
-- **Portable exe** breaks if launched twice (electron-builder unpacks every
-  launch of one build to the same temp folder and deletes it on exit →
-  `ffmpeg.dll not found`). The installer is what users should run.
+- **Portable exe** used to break if launched twice (electron-builder unpacked
+  every launch of one build to the same temp folder and deleted it on exit →
+  `ffmpeg.dll not found`); since 1.4.3 `portable.unpackDirName: true` gives
+  each launch its own folder. The installer is still what users should run.
 - **Models** live in `<userData>/models/{parakeet-tdt-0.6b-v3,whisper-*,vad}`,
   fetched file-by-file from Hugging Face (`csukuangfj/...`) so nothing needs
   bzip2/tar. Never bundle them in the installer.
 - Passwords are encrypted with `safeStorage` (DPAPI on Windows), so a copied
-  `settings.json` does not carry them to another machine.
+  `settings.json` does not carry them to another machine. On Linux
+  `getSelectedStorageBackend()` is consulted: `basic_text` (no keyring) is a
+  hardcoded key, so `encryptionAvailable` is false there, the password is kept
+  plain in the 0600 file and Settings says so (audit finding M1). `_decrypt`
+  still reads `enc:v1:` values written by any backend so nobody is locked out.
+- **Portable exe** unpacks to a per-launch temp folder (`portable.unpackDirName:
+  true` — electron-builder's docs say `false` but its code maps `false` to a
+  fixed per-build id and only `true` to NSIS's per-launch `$PLUGINSDIR`), so
+  two launches no longer delete each other's files.
 
 ## Security posture (1.4.0 review — keep it this way)
 
@@ -166,15 +177,27 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   If a provider relays media from an address other than its SDP `c=`, users
   turn the switch off — that is the diagnosis for sudden one-way audio.
 - Updater: a custom feed must be https unless loopback/RFC 1918
-  (`feedFromUrl`); `openExternal` only for http(s). Models: size + SHA-256
-  pinned in `models.js` CATALOG and verified on download — refresh the pins if
-  upstream files change (`huggingface.co/api/models/<repo>?blobs=true` →
-  `lfs.sha256`).
+  (`feedFromUrl`); `openExternal` only for http(s). Redirects in `fetchText`
+  and the model downloader go through `urlpolicy.followRedirect`, which
+  refuses https→http (audit M3). Models: size + SHA-256 pinned in `models.js`
+  CATALOG and verified on download — refresh the pins if upstream files change
+  (`huggingface.co/api/models/<repo>?blobs=true` → `lfs.sha256`).
+- IPC: `handle()`/`on()` in main.js run `trustedSender(event)` — main frame,
+  `file:` URL under `src/renderer/`, belongs to one of our BrowserWindows.
+  Register new channels through those wrappers, never bare `ipcMain.*`.
+- SIP trace (`log.redactSip`) masks `response`, `nonce`, `cnonce`, `rspauth`
+  in Authorization/Authenticate headers; `acceptsSource` is closed until the
+  registrar is resolved.
 - Settings merge skips `__proto__`/`constructor`/`prototype`. CSV export
   defuses formulas (`=`, `@`, and `+`/`-` not followed by a number); phone
   numbers must keep their `+`.
-- Electron 44 (from 33 in 1.4.0). `npm audit --omit=dev` must stay clean;
-  dev-chain findings are build-time only.
+- Electron 44 (from 33 in 1.4.0). `npm audit --omit=dev` must stay clean
+  (CI fails); the full tree is audited as a CI warning — act on it at the next
+  release (1.4.2's toolchain carried 12 advisories incl. an AppImage
+  library-path hijack, CVE-2026-54672; electron-builder 26.15.3 cleared them).
+  Currency routine: before each release run `npm outdated` + `npm audit`,
+  take Electron patch releases immediately, and plan the next major before
+  the current line leaves support (Electron supports the latest three majors).
 - Not covered, by design: RTP is unencrypted (no SRTP); no code signing yet.
   `SECURITY.md` is the user-facing statement — keep it truthful.
 
@@ -186,11 +209,16 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - Spanish recognition is verified only by Parakeet's documentation; no Spanish
   TTS voice exists on Mike's PC to synthesise a test. English is verified
   end-to-end (Windows TTS sample through the 8 kHz µ-law path).
-- Code signing: `release.yml` already reads `WIN_CSC_LINK` /
-  `WIN_CSC_KEY_PASSWORD` secrets; Mike may buy a certificate later.
+- Code signing (audit M2, accepted): `release.yml` already reads `WIN_CSC_LINK` /
+  `WIN_CSC_KEY_PASSWORD` secrets; Mike may buy an Authenticode certificate later.
+  Until then every release carries `SHA256SUMS.txt` (built in the publish job).
+  Linux GPG signing is not set up.
 - Linux packages are built and inspected (deb/rpm metadata, desktop entry with
   sip:/tel: handlers) but have never been run by a user.
-- Codecs are G.711 only; media is plain RTP; no ICE/STUN. Known and accepted.
+- Codecs are G.711 only; media is plain RTP (audit L5, accepted; SRTP is a
+  future enhancement); no ICE/STUN. Known and accepted.
+- The 1.4.2 security audit lives in `SECURITY-AUDIT-1.4.2.md` (findings
+  H1–L6); everything except M2 (certificate) and L5 (SRTP) was fixed in 1.4.3.
 
 ## Mike's preferences (learned)
 

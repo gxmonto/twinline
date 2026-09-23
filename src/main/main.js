@@ -6,6 +6,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const url = require('url');
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, safeStorage, powerSaveBlocker, dialog, screen, powerMonitor } = require('electron');
 
 const log = require('./log');
@@ -685,13 +686,41 @@ async function exportContacts(format) {
 
 // ---- IPC -------------------------------------------------------------------
 
+// Only our own pages may drive the main process. Every window loads a file
+// from the renderer directory and harden() keeps it there, so a sender whose
+// frame is anywhere else is not something we created — refuse it rather than
+// trust that the renderer can never be led astray.
+const RENDERER_ORIGIN = url.pathToFileURL(path.join(__dirname, '..', 'renderer') + path.sep).href;
+function trustedSender(event) {
+  try {
+    const frame = event.senderFrame;
+    if (!frame || frame !== event.sender.mainFrame) return false;
+    if (!String(frame.url).startsWith(RENDERER_ORIGIN)) return false;
+    return !!BrowserWindow.fromWebContents(event.sender);
+  } catch {
+    return false;
+  }
+}
+
 function handle(channel, fn) {
-  ipcMain.handle(channel, async (_event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (!trustedSender(event)) {
+      log.warn('main', 'refused IPC from an unexpected sender', { channel, url: event.senderFrame?.url });
+      return { ok: false, error: 'not allowed' };
+    }
     try {
       return { ok: true, data: await fn(...args) };
     } catch (err) {
       return { ok: false, error: err.message || String(err) };
     }
+  });
+}
+
+/** ipcMain.on with the same sender check; untrusted messages are dropped. */
+function on(channel, fn) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!trustedSender(event)) return;
+    fn(event, ...args);
   });
 }
 
@@ -707,6 +736,7 @@ function registerIpc() {
     windowControls: 'native',             // the OS draws min/max/close; the page must not
     titleBarHeight: TITLE_BAR_HEIGHT,
     encryptionAvailable: settings.encryptionAvailable,
+    encryptionBackend: settings.encryptionBackend,
   }));
 
   handle('settings:get', () => settings.redacted());
@@ -789,7 +819,7 @@ function registerIpc() {
   handle('audio:micGain', ({ gain }) => manager.setMicGain(gain));
 
   // High-rate path: one 20 ms microphone frame, as Int16 PCM.
-  ipcMain.on('audio:mic', (_event, buffer) => {
+  on('audio:mic', (_event, buffer) => {
     if (!audio) return;
     audio.pushMicFrame(new Int16Array(buffer));
   });
@@ -797,23 +827,23 @@ function registerIpc() {
   // Window controls act on whichever window sent them: the main window or a
   // popped-out panel.
   const senderWindow = (event) => BrowserWindow.fromWebContents(event.sender);
-  ipcMain.on('window:minimise', (event) => senderWindow(event)?.minimize());
-  ipcMain.on('window:maximise', (event) => {
+  on('window:minimise', (event) => senderWindow(event)?.minimize());
+  on('window:maximise', (event) => {
     const win = senderWindow(event);
     if (!win) return;
     if (win.isMaximized()) win.unmaximize(); else win.maximize();
   });
-  ipcMain.on('window:close', (event) => senderWindow(event)?.close());
+  on('window:close', (event) => senderWindow(event)?.close());
   handle('window:openPanel', ({ name, params }) => openPanel(name, params || {}));
 
   // The incoming-call popup drags itself: it has no OS frame and no CSS drag
   // region (those develop dead zones on scaled displays), so the page reports
   // where the grip was dragged to and we move the window.
-  ipcMain.on('popup:move', (event, { x, y }) => {
+  on('popup:move', (event, { x, y }) => {
     const win = senderWindow(event);
     if (win && win === popupWindow && Number.isFinite(x) && Number.isFinite(y)) win.setPosition(Math.round(x), Math.round(y), false);
   });
-  ipcMain.on('popup:dismiss', () => {
+  on('popup:dismiss', () => {
     // Hide the popup for the calls ringing now; the main window keeps ringing.
     for (const c of incomingCalls()) popupDismissed.add(c.id);
     updatePopup();
