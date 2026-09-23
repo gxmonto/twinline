@@ -184,6 +184,25 @@ async function runSmokeTest() {
       }
     }
 
+    // A popped-out panel must render just that dialog.
+    openPanel('settings');
+    const panel = panels.get('settings:');
+    await new Promise((resolve, reject) => {
+      panel.webContents.once('did-finish-load', resolve);
+      setTimeout(() => reject(new Error('panel load timed out')), 15000);
+    });
+    await new Promise((r) => setTimeout(r, 800));
+    report.panel = await panel.webContents.executeJavaScript(`(() => ({
+      panelMode: document.body.classList.contains('panel-mode'),
+      settingsShown: !document.getElementById('settingsOverlay').classList.contains('hidden'),
+      dialerHidden: getComputedStyle(document.querySelector('.dialer')).display === 'none',
+      title: document.querySelector('.titlebar .name').textContent,
+    }))()`);
+    panel.close();
+    if (!report.panel.panelMode || !report.panel.settingsShown || !report.panel.dialerHidden) {
+      problems.push(`popped-out settings panel did not render as a panel: ${JSON.stringify(report.panel)}`);
+    }
+
     const snapshot = manager.snapshot();
     console.log('smoke: report      =', JSON.stringify(report));
     console.log('smoke: accounts    =', snapshot.accounts.length);
@@ -403,10 +422,75 @@ function createTray() {
   tray.on('click', focusWindow);
 }
 
+/**
+ * Broadcast to every window: the main window and any popped-out panels all
+ * render from the same main-process state, so they all get the same events.
+ * (The incoming-call popup ignores channels it does not know.)
+ */
 function send(channel, payload) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, payload);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
   }
+}
+
+/** The 50 Hz speaker stream only ever plays in the main window. */
+function sendAudio(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+// ---- popped-out panels -----------------------------------------------------
+
+/** @type {Map<string, BrowserWindow>} panel key -> window */
+const panels = new Map();
+
+const PANEL_SIZES = {
+  settings: { width: 470, height: 740 },
+  contacts: { width: 460, height: 640 },
+  history: { width: 500, height: 620 },
+  transcript: { width: 440, height: 540 },
+  transcriptView: { width: 540, height: 660 },
+  transfer: { width: 400, height: 340 },
+};
+
+/**
+ * Open a dialog as its own window. The page is the same index.html in
+ * "panel mode" (?panel=...), which shows only that dialog with a draggable
+ * title bar; closing the dialog closes the window.
+ */
+function openPanel(name, params = {}) {
+  if (!PANEL_SIZES[name]) throw new Error(`unknown panel "${name}"`);
+  const key = `${name}:${params.call || params.file || ''}`;
+  const existing = panels.get(key);
+  if (existing && !existing.isDestroyed()) { existing.focus(); return { focused: true }; }
+
+  const size = PANEL_SIZES[name];
+  const anchor = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+  const win = new BrowserWindow({
+    ...size,
+    minWidth: 340,
+    minHeight: 260,
+    x: anchor ? anchor.x + anchor.width + 12 : undefined,
+    y: anchor ? anchor.y : undefined,
+    frame: false,
+    show: false,
+    backgroundColor: '#1a1f29',
+    title: `TwinLine — ${name}`,
+    icon: WINDOW_ICON,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  win.setMenuBarVisibility(false);
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
+    query: { panel: name, ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) },
+  });
+  win.once('ready-to-show', () => { if (!isSmoke) win.show(); });
+  win.on('closed', () => { if (panels.get(key) === win) panels.delete(key); });
+  panels.set(key, win);
+  return { opened: true };
 }
 
 /** Keep the machine awake while a call is up. */
@@ -443,7 +527,7 @@ async function bootstrap() {
   });
   audio.on('speaker', (frame) => {
     // Transfer the PCM as a plain ArrayBuffer; structured clone keeps this cheap.
-    send('audio:speaker', frame.buffer.slice(frame.byteOffset, frame.byteOffset + frame.byteLength));
+    sendAudio('audio:speaker', frame.buffer.slice(frame.byteOffset, frame.byteOffset + frame.byteLength));
   });
   audio.on('error', (err) => send('error', { message: err.message }));
 
@@ -589,6 +673,8 @@ function registerIpc() {
     transcription.configure(saved.transcription);
     await manager.applyAccounts(saved.accounts);
     updatePopup();
+    // Every window caches the redacted settings; tell them all.
+    send('settings', settings.redacted());
     return settings.redacted();
   });
 
@@ -614,11 +700,12 @@ function registerIpc() {
   handle('log:open', async () => { await shell.openPath(log.dir); return { dir: log.dir }; });
   handle('network:refresh', ({ reason }) => manager.refreshNetwork(reason || 'requested'));
 
+  const contactsChanged = (result) => { send('contacts:changed', {}); return result; };
   handle('contacts:list', () => contacts.list());
-  handle('contacts:add', (contact) => contacts.add(contact));
-  handle('contacts:update', ({ id, contact }) => contacts.update(id, contact));
-  handle('contacts:remove', ({ id }) => contacts.remove(id));
-  handle('contacts:import', () => importContacts());
+  handle('contacts:add', (contact) => contactsChanged(contacts.add(contact)));
+  handle('contacts:update', ({ id, contact }) => contactsChanged(contacts.update(id, contact)));
+  handle('contacts:remove', ({ id }) => contactsChanged(contacts.remove(id)));
+  handle('contacts:import', async () => contactsChanged(await importContacts()));
   handle('contacts:export', ({ format }) => exportContacts(format));
 
   handle('state:get', () => manager.snapshot());
@@ -655,12 +742,17 @@ function registerIpc() {
     audio.pushMicFrame(new Int16Array(buffer));
   });
 
-  ipcMain.on('window:minimise', () => mainWindow && mainWindow.minimize());
-  ipcMain.on('window:maximise', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize();
+  // Window controls act on whichever window sent them: the main window or a
+  // popped-out panel.
+  const senderWindow = (event) => BrowserWindow.fromWebContents(event.sender);
+  ipcMain.on('window:minimise', (event) => senderWindow(event)?.minimize());
+  ipcMain.on('window:maximise', (event) => {
+    const win = senderWindow(event);
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize(); else win.maximize();
   });
-  ipcMain.on('window:close', () => mainWindow && mainWindow.close());
+  ipcMain.on('window:close', (event) => senderWindow(event)?.close());
+  handle('window:openPanel', ({ name, params }) => openPanel(name, params || {}));
 }
 
 // ---- lifecycle -------------------------------------------------------------

@@ -12,6 +12,17 @@ import { RendererAudio } from './audio-engine.js';
 const api = window.twinline;
 const audio = new RendererAudio();
 
+// Panel mode: this window is one dialog popped out of the main window
+// (index.html?panel=settings). Same page, same state feed; no phone chrome,
+// no audio, and closing the dialog closes the window.
+const PANEL_PARAMS = new URLSearchParams(location.search);
+const PANEL = PANEL_PARAMS.get('panel');
+if (PANEL) document.body.classList.add('panel-mode', `panel-${PANEL}`);
+const PANEL_TITLES = {
+  settings: 'Settings', contacts: 'Contacts', history: 'Call history',
+  transcript: 'Transcript', transcriptView: 'Transcript', transfer: 'Transfer call',
+};
+
 let settings = null;
 let appInfo = null;
 let state = { calls: [], conference: [], muted: false, accounts: [] };
@@ -34,6 +45,8 @@ async function boot() {
   wireEvents();
   renderAll();
 
+  if (PANEL) { await enterPanelMode(); setInterval(tickDurations, 500); return; }
+
   // Audio needs a user gesture in some configurations; try now and retry on
   // the first interaction so an incoming call is never silent.
   startAudio();
@@ -43,9 +56,66 @@ async function boot() {
   setInterval(tickDurations, 500);
 }
 
+/** Show the one dialog this window exists for, and close the window with it. */
+async function enterPanelMode() {
+  document.title = `TwinLine — ${PANEL_TITLES[PANEL] || PANEL}`;
+  devices = await RendererAudio.devices();   // labels if permitted, ids regardless
+  document.querySelector('.titlebar .name').textContent = `TwinLine · ${PANEL_TITLES[PANEL] || PANEL}`;
+
+  const overlayFor = {
+    settings: 'settingsOverlay', contacts: 'contactsOverlay', history: 'historyOverlay',
+    transcriptView: 'transcriptOverlay', transfer: 'transferOverlay', transcript: 'transcriptPanel',
+  };
+  const target = $(overlayFor[PANEL]);
+  if (!target) { api.window.close(); return; }
+
+  switch (PANEL) {
+    case 'settings': openSettings(); break;
+    case 'contacts': await openContacts(); break;
+    case 'history': await openHistory(); break;
+    case 'transcriptView': await openTranscriptFile(PANEL_PARAMS.get('file')); break;
+    case 'transfer': openTransfer(PANEL_PARAMS.get('call')); break;
+    case 'transcript': await showLiveTranscript(PANEL_PARAMS.get('call')); break;
+    default: break;
+  }
+  if (target.classList.contains('hidden')) { api.window.close(); return; }
+
+  // Whatever hides the dialog — Save, Cancel, ✕, Escape — ends this window.
+  new MutationObserver(() => {
+    if (target.classList.contains('hidden')) api.window.close();
+  }).observe(target, { attributes: true, attributeFilter: ['class'] });
+}
+
+/** Pop a dialog out into its own window and hide it here. */
+async function popOut(name, params = {}) {
+  await guard(api.window.openPanel(name, params));
+  const overlay = { settings: 'settingsOverlay', contacts: 'contactsOverlay', history: 'historyOverlay', transcriptView: 'transcriptOverlay', transfer: 'transferOverlay' }[name];
+  if (overlay) $(overlay).classList.add('hidden');
+  if (name === 'transcript') { shownTranscript = null; renderTranscript(); }
+}
+
+/** Show a live transcript this window has not seen from the start. */
+async function showLiveTranscript(callId) {
+  let id = callId;
+  if (!id) {
+    const active = (state.transcription && state.transcription.active) || [];
+    id = active[0] || null;
+  }
+  if (id && !transcripts.has(id)) {
+    const record = await guard(api.transcribe.live(id));
+    if (record) transcripts.set(id, { ...record, lines: record.lines || [] });
+  }
+  shownTranscript = id;
+  renderTranscript();
+  if (!id) {
+    $('transcriptPanel').classList.remove('hidden');
+    $('transcriptLines').innerHTML = '<li class="empty-line">No transcript is running. This window will show the next one.</li>';
+  }
+}
+
 let audioStarting = false;
 async function startAudio() {
-  if (audio.started || audioStarting) return;
+  if (PANEL || audio.started || audioStarting) return;
   audioStarting = true;
   audio.applySettings(settings.audio);
   try {
@@ -67,16 +137,34 @@ async function startAudio() {
 
 function wireEvents() {
   api.on.state((snapshot) => {
-    playTransitionCues(state.calls, snapshot.calls);
+    if (!PANEL) playTransitionCues(state.calls, snapshot.calls);
     state = snapshot;
     renderAll();
     updateRingtone();
   });
+  // Settings saved in any window; contacts edited in any window.
+  api.on.settings((s) => { settings = s; if (!$('settingsOverlay').classList.contains('hidden') && !PANEL) renderSettingsAccounts(); });
+  api.on.contactsChanged(async () => {
+    if ($('contactsOverlay').classList.contains('hidden')) return;
+    contacts = await guard(api.contacts.list()) || contacts;
+    renderContacts();
+  });
+  for (const button of document.querySelectorAll('button[data-popout]')) {
+    button.onclick = () => {
+      const name = button.dataset.popout;
+      const params = name === 'transfer' ? { call: transferContext }
+        : name === 'transcriptView' ? { file: viewedTranscript && viewedTranscript.file }
+        : name === 'transcript' ? { call: shownTranscript }
+        : {};
+      popOut(name, params);
+    };
+  }
   api.on.accounts((accounts) => { state.accounts = accounts; renderLines(); renderAccountSelect(); });
   api.on.speaker((buffer) => audio.play(buffer));
   api.on.levels(renderLevels);
   api.on.incoming(() => updateRingtone());
   api.on.callEnded((info) => {
+    if (PANEL) return;
     updateRingtone();
     // A call that never connected and was refused gets the busy signal;
     // everything else gets the short "ended" cue.
@@ -449,6 +537,7 @@ async function dial() {
 }
 
 function pressDigit(digit) {
+  if (PANEL) return;
   // During a call the keypad sends DTMF; otherwise it types a number.
   const target = state.calls.find((c) => c.state === 'connected' && !c.localHold);
   if (target) {
@@ -477,6 +566,7 @@ function toggleKeypad() {
 }
 
 function updateRingtone() {
+  if (PANEL) return;                       // only the main window makes sound
   const incoming = state.calls.some((c) => c.state === 'incoming');
   const outgoingRinging = state.calls.some((c) => c.state === 'ringing');
   if (incoming) audio.startRinging('ring');
@@ -653,6 +743,11 @@ function renderSettingsAudio() {
     const select = $(selectId);
     const options = [{ id: 'default', label: 'System default' },
       ...list.filter((d) => d.id !== 'default')];
+    // A popped-out Settings window has not opened the microphone, so device
+    // labels may be missing; never let that silently reset a saved choice.
+    if (current && current !== 'default' && !options.some((d) => d.id === current)) {
+      options.push({ id: current, label: 'Current device (not enumerated in this window)' });
+    }
     select.innerHTML = options.map((d) =>
       `<option value="${esc(d.id)}">${esc(d.label)}</option>`).join('');
     select.value = options.some((d) => d.id === current) ? current : 'default';
@@ -758,7 +853,7 @@ async function saveSettings() {
   settings = saved;
 
   audio.applySettings(settings.audio);
-  if (audioChanged) {
+  if (audioChanged && !PANEL) {              // only the main window owns the devices
     await audio.restart();
     audio.onFrame = (frame) => api.audio.sendMicFrame(frame);
     devices = await RendererAudio.devices();
@@ -778,6 +873,8 @@ let modelsStatus = null;
 
 function onTranscriptStarted(record) {
   transcripts.set(record.callId, { ...record, lines: record.lines || [] });
+  // A transcript window pinned to one call keeps showing that call.
+  if (PANEL === 'transcript' && PANEL_PARAMS.get('call') && PANEL_PARAMS.get('call') !== record.callId) return;
   shownTranscript = record.callId;
   renderTranscript();
 }

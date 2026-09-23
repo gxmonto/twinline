@@ -52,6 +52,7 @@
           <span class="speaking" id="speakYou" title="You are speaking">You</span>
           <span class="speaking" id="speakCaller" title="Caller is speaking">Caller</span>
           <button class="btn ghost small" id="btnTranscriptCopy" title="Copy the transcript">Copy</button>
+          <button class="icon-btn popout" data-popout="transcript" title="Open in its own window" aria-label="Open in its own window">&#10697;</button>
           <button class="btn ghost small" id="btnTranscriptClose" title="Hide this panel">&#10005;</button>
         </div>
       </div>
@@ -97,7 +98,7 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2>Settings</h2>
-        <button class="icon-btn" id="btnSettingsClose" aria-label="Close settings">&#10005;</button>
+        <span class="head-actions"><button class="icon-btn popout" data-popout="settings" title="Open in its own window" aria-label="Open in its own window">&#10697;</button> <button class="icon-btn" id="btnSettingsClose" aria-label="Close settings">&#10005;</button></span>
       </div>
       <div class="sheet-body">
         <nav class="tabs" id="settingsTabs">
@@ -238,7 +239,7 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2>Call history</h2>
-        <button class="icon-btn" id="btnHistoryClose" aria-label="Close history">&#10005;</button>
+        <span class="head-actions"><button class="icon-btn popout" data-popout="history" title="Open in its own window" aria-label="Open in its own window">&#10697;</button> <button class="icon-btn" id="btnHistoryClose" aria-label="Close history">&#10005;</button></span>
       </div>
       <div class="sheet-body">
         <ul class="history" id="historyList"></ul>
@@ -253,7 +254,7 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2 id="transcriptViewTitle">Transcript</h2>
-        <button class="icon-btn" id="btnTranscriptViewClose" aria-label="Close">&#10005;</button>
+        <span class="head-actions"><button class="icon-btn popout" data-popout="transcriptView" title="Open in its own window" aria-label="Open in its own window">&#10697;</button> <button class="icon-btn" id="btnTranscriptViewClose" aria-label="Close">&#10005;</button></span>
       </div>
       <div class="sheet-body">
         <pre class="transcript-text" id="transcriptViewText"></pre>
@@ -271,7 +272,7 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2>Contacts <span class="pill" id="contactCount"></span></h2>
-        <button class="icon-btn" id="btnContactsClose" aria-label="Close contacts">&#10005;</button>
+        <span class="head-actions"><button class="icon-btn popout" data-popout="contacts" title="Open in its own window" aria-label="Open in its own window">&#10697;</button> <button class="icon-btn" id="btnContactsClose" aria-label="Close contacts">&#10005;</button></span>
       </div>
       <div class="sheet-body">
         <div class="contacts-toolbar">
@@ -309,7 +310,7 @@
     <div class="sheet small">
       <div class="sheet-head">
         <h2>Transfer call</h2>
-        <button class="icon-btn" id="btnTransferClose" aria-label="Close">&#10005;</button>
+        <span class="head-actions"><button class="icon-btn popout" data-popout="transfer" title="Open in its own window" aria-label="Open in its own window">&#10697;</button> <button class="icon-btn" id="btnTransferClose" aria-label="Close">&#10005;</button></span>
       </div>
       <div class="sheet-body">
         <p class="hint" id="transferSubject"></p>
