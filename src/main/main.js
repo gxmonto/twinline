@@ -82,6 +82,9 @@ function createWindow() {
     minWidth: 380,
     minHeight: 560,
     show: false,
+    // The page draws its own title bar (drag region, minimise, maximise,
+    // close), so the OS frame would be a second, redundant one.
+    frame: false,
     backgroundColor: '#12151c',
     title: 'TwinLine',
     icon: WINDOW_ICON,
@@ -96,6 +99,9 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
+  const sendWindowState = () => send('window:state', { maximized: mainWindow.isMaximized() });
+  mainWindow.on('maximize', sendWindowState);
+  mainWindow.on('unmaximize', sendWindowState);
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
@@ -650,6 +656,10 @@ function registerIpc() {
   });
 
   ipcMain.on('window:minimise', () => mainWindow && mainWindow.minimize());
+  ipcMain.on('window:maximise', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize();
+  });
   ipcMain.on('window:close', () => mainWindow && mainWindow.close());
 }
 

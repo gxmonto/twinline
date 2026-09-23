@@ -69,7 +69,7 @@ async function main() {
   if (!file || file.startsWith('--')) { console.error('usage: node tools/transcribe-file.js <wav> [--model small] [--lang auto] [--telephone]'); process.exit(2); }
 
   const store = new ModelStore(arg('models-dir', defaultModelsDir()));
-  const modelId = arg('model', 'small');
+  const modelId = arg('model', 'parakeet');
   const model = store.paths(modelId);
   const vad = store.paths('vad');
   if (!model) { console.error(`model "${modelId}" is not downloaded in ${store.root}`); process.exit(1); }

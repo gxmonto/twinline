@@ -175,9 +175,26 @@ test('model store knows what is installed and where', () => {
   assert.strictEqual(store.installed('small'), false);
 
   const status = store.status();
-  assert.strictEqual(status.models.length, 3);
-  assert.deepStrictEqual(status.models.map((m) => m.id), ['base', 'small', 'medium']);
+  assert.strictEqual(status.models.length, 4);
+  assert.deepStrictEqual(status.models.map((m) => m.id), ['parakeet', 'base', 'small', 'medium']);
+  assert.strictEqual(status.models[0].type, 'nemo_transducer');
+  assert.ok(store.dirFor('parakeet').endsWith('parakeet-tdt-0.6b-v3'));
   assert.throws(() => ModelStore.entry('gigantic'));
+});
+
+test('old Whisper settings migrate to Parakeet once', () => {
+  const { migrate, TRANSCRIPTION_CATALOG_VERSION } = require('../src/main/config');
+  const data = { transcription: { model: 'medium', consentTone: true, autoStart: true } };
+  assert.strictEqual(migrate(data), true);
+  assert.strictEqual(data.transcription.model, 'parakeet');
+  assert.strictEqual(data.transcription.autoStart, true, 'other choices are kept');
+  assert.strictEqual('consentTone' in data.transcription, false);
+  assert.strictEqual(data.transcription.catalogVersion, TRANSCRIPTION_CATALOG_VERSION);
+  assert.strictEqual(migrate(data), false, 'runs only once');
+  // A user who deliberately picks Whisper afterwards is left alone.
+  data.transcription.model = 'small';
+  assert.strictEqual(migrate(data), false);
+  assert.strictEqual(data.transcription.model, 'small');
 });
 
 test('mixer exposes per-party audio for taps and plays a queued tone to both sides', () => {

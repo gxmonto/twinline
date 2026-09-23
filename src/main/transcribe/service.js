@@ -11,23 +11,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { EventEmitter } = require('events');
-const { utilityProcess } = require('electron');
 const log = require('../log').child('transcribe');
 
 const FRAME_SAMPLES = 160;
-
-/** 1400 Hz, 400 ms: the conventional "this call is being recorded" beep. */
-function consentTone(sampleRate = 8000, ms = 400, level = 0.25) {
-  const n = Math.round(sampleRate * ms / 1000);
-  const out = new Int16Array(n);
-  const ramp = Math.round(sampleRate * 0.02);
-  for (let i = 0; i < n; i++) {
-    const env = Math.min(1, i / ramp, (n - 1 - i) / ramp);
-    out[i] = Math.round(Math.sin(2 * Math.PI * 1400 * i / sampleRate) * 32767 * level * env);
-  }
-  return out;
-}
 
 class TranscriptionService extends EventEmitter {
   /**
@@ -38,14 +26,18 @@ class TranscriptionService extends EventEmitter {
    * @param {string} opts.workerPath      absolute path to worker.js (outside the asar)
    * @param {string} opts.platformDir     directory holding the sherpa-onnx shared libraries
    */
-  constructor({ audio, models, transcriptsDir, workerPath, platformDir }) {
+  constructor({ audio, models, transcriptsDir, workerPath, platformDir, fork = null }) {
     super();
     this.audio = audio;
     this.models = models;
     this.dir = transcriptsDir;
     this.workerPath = workerPath;
     this.platformDir = platformDir;
-    this.settings = { model: 'small', language: 'auto', autoStart: false, consentTone: true, threads: 4 };
+    // Injectable for tests; the real thing is Electron's utilityProcess.fork.
+    this.fork = fork || ((modulePath, args, options) => require('electron').utilityProcess.fork(modulePath, args, options));
+    this.settings = { model: 'parakeet', language: 'auto', autoStart: false, threads: 0 };
+    /** Per-channel counters, so the log can say whether audio ever arrived. */
+    this.counters = new Map();
 
     this.worker = null;
     this.workerState = 'off';          // off | starting | ready | error
@@ -108,7 +100,7 @@ class TranscriptionService extends EventEmitter {
     this.emit('status', this.status());
     log.info('starting worker', { worker: this.workerPath, model: this.settings.model, language: this.settings.language });
 
-    const child = utilityProcess.fork(this.workerPath, [], {
+    const child = this.fork(this.workerPath, [], {
       env,
       serviceName: 'TwinLine transcription',
       stdio: 'pipe',
@@ -133,12 +125,14 @@ class TranscriptionService extends EventEmitter {
 
     const model = this.models.paths(this.settings.model);
     const vad = this.models.paths('vad');
+    // Leave two cores for the audio clock and the UI; recognition takes the rest.
+    const threads = this.settings.threads > 0 ? this.settings.threads : Math.max(2, Math.min(8, os.cpus().length - 2));
     child.postMessage({
       type: 'init',
-      model,
+      model: { ...model, type: this.models.constructor.entry(this.settings.model).type },
       vadModel: vad.vad,
       language: this.settings.language,
-      threads: this.settings.threads,
+      threads,
     });
   }
 
@@ -209,11 +203,24 @@ class TranscriptionService extends EventEmitter {
 
   _handleFrames({ mic, legs }) {
     if (!this.worker || this.workerState !== 'ready') return;
-    if (this.micUsers > 0 && mic) this.worker.postMessage({ type: 'audio', id: 'mic', samples: mic });
+    if (this.micUsers > 0) {
+      this._count('mic', mic);
+      if (mic) this.worker.postMessage({ type: 'audio', id: 'mic', samples: mic });
+    }
     for (const [callId] of this.live) {
       const frame = legs.get(callId);
+      this._count(`${callId}|remote`, frame);
       if (frame) this.worker.postMessage({ type: 'audio', id: `${callId}|remote`, samples: frame });
     }
+  }
+
+  _count(id, frame) {
+    let c = this.counters.get(id);
+    if (!c) { c = { frames: 0, empty: 0, loud: 0 }; this.counters.set(id, c); }
+    if (!frame) { c.empty++; return; }
+    c.frames++;
+    // Cheap loudness: any sample over ~-30 dBFS counts the frame as non-silent.
+    for (let i = 0; i < frame.length; i += 8) { if (Math.abs(frame[i]) > 1000) { c.loud++; break; } }
   }
 
   // ---- transcripts --------------------------------------------------------
@@ -249,8 +256,6 @@ class TranscriptionService extends EventEmitter {
     }
     record.remoteOpenedAt = Date.now();
     this._setTapping(true);
-
-    if (this.settings.consentTone) this.audio.injectTone(info.callId, consentTone());
 
     log.info('transcription started', { call: info.callId.slice(0, 8), remote: info.remoteNumber });
     this.emit('started', this._public(record));
@@ -301,7 +306,18 @@ class TranscriptionService extends EventEmitter {
       this._idleTimer = setTimeout(() => { if (!this.live.size) this._shutdownWorker(); }, 10 * 60 * 1000);
       this._idleTimer.unref?.();
     }
-    log.info('transcription finished', { call: callId.slice(0, 8), lines: record.lines.length, file: record.file && path.basename(record.file) });
+    // Counters answer "did audio from each side reach the engine at all?"
+    const remoteKey = `${callId}|remote`;
+    log.info('transcription finished', {
+      call: callId.slice(0, 8),
+      lines: record.lines.length,
+      you: record.lines.filter((l) => l.speaker === 'you').length,
+      caller: record.lines.filter((l) => l.speaker === 'caller').length,
+      audio: { mic: this.counters.get('mic') || null, remote: this.counters.get(remoteKey) || null },
+      file: record.file && path.basename(record.file),
+    });
+    this.counters.delete(remoteKey);
+    if (!this.live.size) this.counters.delete('mic');
     const pub = this._public(record);
     this.emit('finished', pub);
     return pub;
@@ -444,4 +460,4 @@ function formatTranscript(record) {
   return head.concat(body).join('\n') + '\n';
 }
 
-module.exports = { TranscriptionService, consentTone, formatTranscript, FRAME_SAMPLES };
+module.exports = { TranscriptionService, formatTranscript, FRAME_SAMPLES };

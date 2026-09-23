@@ -121,6 +121,7 @@ contextBridge.exposeInMainWorld('twinline', {
 
   window: {
     minimise: () => ipcRenderer.send('window:minimise'),
+    maximise: () => ipcRenderer.send('window:maximise'),
     close: () => ipcRenderer.send('window:close'),
   },
 
@@ -146,5 +147,6 @@ contextBridge.exposeInMainWorld('twinline', {
     transcriptStatus: (fn) => on('transcript:status', fn),
     modelsProgress: (fn) => on('models:progress', fn),
     modelsStatus: (fn) => on('models:status', fn),
+    windowState: (fn) => on('window:state', fn),
   },
 });

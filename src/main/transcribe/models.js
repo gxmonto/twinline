@@ -18,11 +18,26 @@ const { EventEmitter } = require('events');
 const log = require('../log').child('models');
 
 const HF = (model, file) => `https://huggingface.co/csukuangfj/sherpa-onnx-whisper-${model}/resolve/main/${file}`;
+const HF_PARAKEET = (file) => `https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/${file}`;
 
 const CATALOG = {
+  parakeet: {
+    id: 'parakeet',
+    type: 'nemo_transducer',
+    dir: 'parakeet-tdt-0.6b-v3',
+    label: 'Parakeet-TDT 0.6B v3 — recommended: fast, accurate, 25 languages incl. English and Spanish',
+    approxMB: 670,
+    files: [
+      { name: 'encoder.int8.onnx', url: HF_PARAKEET('encoder.int8.onnx'), role: 'encoder' },
+      { name: 'decoder.int8.onnx', url: HF_PARAKEET('decoder.int8.onnx'), role: 'decoder' },
+      { name: 'joiner.int8.onnx', url: HF_PARAKEET('joiner.int8.onnx'), role: 'joiner' },
+      { name: 'tokens.txt', url: HF_PARAKEET('tokens.txt'), role: 'tokens' },
+    ],
+  },
   base: {
     id: 'base',
-    label: 'Whisper base — fastest, lower accuracy',
+    type: 'whisper',
+    label: 'Whisper base — smallest download, lower accuracy',
     approxMB: 160,
     files: [
       { name: 'base-encoder.int8.onnx', url: HF('base', 'base-encoder.int8.onnx'), role: 'encoder' },
@@ -32,7 +47,8 @@ const CATALOG = {
   },
   small: {
     id: 'small',
-    label: 'Whisper small — recommended',
+    type: 'whisper',
+    label: 'Whisper small — moderate accuracy, ~2 s per utterance',
     approxMB: 375,
     files: [
       { name: 'small-encoder.int8.onnx', url: HF('small', 'small-encoder.int8.onnx'), role: 'encoder' },
@@ -42,7 +58,8 @@ const CATALOG = {
   },
   medium: {
     id: 'medium',
-    label: 'Whisper medium — best accuracy, slow on older CPUs',
+    type: 'whisper',
+    label: 'Whisper medium — slow (5–10 s per utterance), language detection unreliable on phone audio',
     approxMB: 950,
     files: [
       { name: 'medium-encoder.int8.onnx', url: HF('medium', 'medium-encoder.int8.onnx'), role: 'encoder' },
@@ -69,7 +86,9 @@ class ModelStore extends EventEmitter {
   }
 
   dirFor(id) {
-    return path.join(this.root, id === 'vad' ? 'vad' : `whisper-${id}`);
+    if (id === 'vad') return path.join(this.root, 'vad');
+    const entry = ModelStore.entry(id);
+    return path.join(this.root, entry.dir || `whisper-${id}`);
   }
 
   static entry(id) {
@@ -79,11 +98,11 @@ class ModelStore extends EventEmitter {
     return m;
   }
 
-  /** Absolute paths of an installed model's files, or null if incomplete. */
+  /** Absolute paths of an installed model's files (plus its type), or null if incomplete. */
   paths(id) {
     const entry = ModelStore.entry(id);
     const dir = this.dirFor(id);
-    const out = {};
+    const out = { type: entry.type };
     for (const f of entry.files) {
       const p = path.join(dir, f.name);
       if (!fs.existsSync(p) || fs.statSync(p).size === 0) return null;
@@ -100,6 +119,7 @@ class ModelStore extends EventEmitter {
   status() {
     const models = Object.values(CATALOG).map((m) => ({
       id: m.id,
+      type: m.type,
       label: m.label,
       approxMB: m.approxMB,
       installed: this.installed(m.id),
