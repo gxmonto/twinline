@@ -24,6 +24,7 @@ const https = require('https');
 const http = require('http');
 const { app, shell } = require('electron');
 const log = require('./log').child('updater');
+const { isLocalNetwork, followRedirect } = require('./urlpolicy');
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 30 * 1000;
@@ -75,7 +76,10 @@ function fetchText(url, redirects = 5) {
     const req = mod.get(url, { headers: { 'user-agent': `TwinLine/${app.getVersion()}` } }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
         res.resume();
-        resolve(fetchText(new URL(res.headers.location, url).toString(), redirects - 1));
+        // The redirect must not drop the manifest onto plain http (M3).
+        let next;
+        try { next = followRedirect(url, res.headers.location); } catch (err) { reject(err); return; }
+        resolve(fetchText(next, redirects - 1));
         return;
       }
       if (res.statusCode !== 200) { res.resume(); reject(new Error(`HTTP ${res.statusCode} for ${url}`)); return; }
@@ -111,16 +115,6 @@ function feedFromUrl(url) {
   const gh = /^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/i.exec(u);
   if (gh) return { provider: 'github', owner: gh[1], repo: gh[2].replace(/\.git$/, '') };
   return { provider: 'generic', url: u.replace(/\/+$/, '') };
-}
-
-/** Loopback or RFC 1918 / link-local — places an attacker on the internet cannot sit. */
-function isLocalNetwork(host) {
-  const h = String(host).replace(/^\[|\]$/g, '').toLowerCase();
-  if (h === 'localhost' || h === '::1' || h.endsWith('.local')) return true;
-  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
-  if (!m) return false;
-  const [a, b] = [Number(m[1]), Number(m[2])];
-  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
 }
 
 /** Where the Linux manifest lives for a given feed. */
@@ -366,4 +360,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork };
+module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork, fetchText };

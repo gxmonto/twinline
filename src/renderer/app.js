@@ -818,9 +818,12 @@ function renderSettingsGeneral() {
   $('updateMode').value = (settings.updates && settings.updates.mode) || 'ask';
   $('updateUrl').value = (settings.updates && settings.updates.url) || '';
 
+  const store = { dpapi: 'Windows (DPAPI)', gnome_libsecret: 'GNOME Keyring', kwallet: 'KWallet', kwallet5: 'KWallet', kwallet6: 'KWallet', keychain: 'the macOS Keychain' }[appInfo.encryptionBackend] || 'your operating system keyring';
   $('encryptionHint').textContent = appInfo.encryptionAvailable
-    ? 'Passwords are encrypted at rest using your operating system keyring.'
-    : 'No OS keyring is available, so passwords are stored in a file readable only by your user account.';
+    ? `Passwords are encrypted at rest with ${store}.`
+    : (appInfo.platform === 'linux'
+      ? 'No system keyring is running (GNOME Keyring or KWallet), so passwords are NOT encrypted: they are kept in a file readable only by your user account. Install and unlock a keyring, then re-enter the password, to protect it.'
+      : 'No OS key store is available, so passwords are NOT encrypted: they are kept in a file readable only by your user account.');
   $('encryptionHint').classList.toggle('warn', !appInfo.encryptionAvailable);
   $('versionHint').textContent = `TwinLine ${appInfo.version} · ${appInfo.platformLabel || appInfo.platform}${appInfo.electron ? ` · Electron ${appInfo.electron}` : ''}`;
 }

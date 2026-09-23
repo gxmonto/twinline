@@ -16,6 +16,7 @@ const https = require('https');
 const http = require('http');
 const { EventEmitter } = require('events');
 const log = require('../log').child('models');
+const { followRedirect } = require('../urlpolicy');
 
 const HF = (model, file) => `https://huggingface.co/csukuangfj/sherpa-onnx-whisper-${model}/resolve/main/${file}`;
 const HF_PARAKEET = (file) => `https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/${file}`;
@@ -246,7 +247,12 @@ function downloadFile(url, dest, signal, onProgress, redirects = 6) {
     const req = mod.get(url, { headers: { 'user-agent': 'TwinLine' } }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
         res.resume();
-        resolve(downloadFile(new URL(res.headers.location, url).toString(), dest, signal, onProgress, redirects - 1));
+        // Hugging Face and GitHub redirect to their CDNs; follow, but never
+        // onto plain http — the hash check would still catch a swapped file,
+        // yet a download channel should not silently drop to cleartext.
+        let next;
+        try { next = followRedirect(url, res.headers.location); } catch (err) { reject(err); return; }
+        resolve(downloadFile(next, dest, signal, onProgress, redirects - 1));
         return;
       }
       if (res.statusCode !== 200) { res.resume(); reject(new Error(`HTTP ${res.statusCode} downloading ${path.basename(dest)}`)); return; }
@@ -300,4 +306,4 @@ function abortError() {
   return err;
 }
 
-module.exports = { ModelStore, CATALOG, VAD, SPEAKER, verifyFile };
+module.exports = { ModelStore, CATALOG, VAD, SPEAKER, verifyFile, downloadFile };

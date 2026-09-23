@@ -6,6 +6,12 @@
  * Windows, the system keyring on Linux) whenever it is available, and are
  * never written to disk in the clear unless the platform offers no backend —
  * in which case the file is created 0600 and the UI says so.
+ *
+ * "Available" is judged by the backend, not by isEncryptionAvailable() alone:
+ * on a Linux desktop with no GNOME Keyring / KWallet, Electron still answers
+ * true but uses its `basic_text` backend, which "encrypts" with a hardcoded,
+ * publicly known key. That is obfuscation, not protection, and it would be
+ * dishonest to tell the user otherwise — so it counts as no encryption.
  */
 
 const fs = require('fs');
@@ -94,10 +100,28 @@ class SettingsStore {
   }
 
   get encryptionAvailable() {
+    return this.encryptionBackend !== null;
+  }
+
+  /**
+   * Name of the real key store in use, or null when passwords cannot be
+   * protected: 'dpapi' (Windows), 'keychain' (macOS), 'gnome_libsecret' /
+   * 'kwallet*' (Linux). Electron's `basic_text` fallback is reported as null.
+   */
+  get encryptionBackend() {
     try {
-      return !!(this.crypto && this.crypto.isEncryptionAvailable());
+      if (!this.crypto || !this.crypto.isEncryptionAvailable()) return null;
+      let backend = null;
+      if (typeof this.crypto.getSelectedStorageBackend === 'function') {
+        try { backend = this.crypto.getSelectedStorageBackend(); } catch { backend = null; }
+      }
+      if (backend === null || backend === undefined) {
+        // Only Linux reports a backend name; elsewhere "available" means the OS store.
+        return process.platform === 'linux' ? null : (process.platform === 'win32' ? 'dpapi' : 'os');
+      }
+      return backend === 'basic_text' || backend === 'unknown' ? null : backend;
     } catch {
-      return false;
+      return null;
     }
   }
 
@@ -145,7 +169,10 @@ class SettingsStore {
 
   _decrypt(value) {
     if (typeof value !== 'string' || !value.startsWith(SECRET_PREFIX)) return value || '';
-    if (!this.encryptionAvailable) return '';
+    // Decrypt with whatever backend wrote it — including basic_text, so a
+    // password stored by an older build is not lost; the next save() writes
+    // it the way the current policy dictates.
+    if (!this.crypto) return '';
     try {
       return this.crypto.decryptString(Buffer.from(value.slice(SECRET_PREFIX.length), 'base64'));
     } catch {
@@ -161,6 +188,7 @@ class SettingsStore {
       account.password = account.password ? '••••••••' : '';
     }
     copy.encryptionAvailable = this.encryptionAvailable;
+    copy.encryptionBackend = this.encryptionBackend;
     return copy;
   }
 

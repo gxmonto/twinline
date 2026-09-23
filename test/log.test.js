@@ -43,6 +43,40 @@ test('debug and SIP trace are off unless tracing is enabled', () => {
   log.setTraceSip(false);
 });
 
+test('the SIP trace masks digest responses and nonces but keeps the username', () => {
+  const msg = [
+    'REGISTER sip:pbx.example SIP/2.0',
+    'Via: SIP/2.0/UDP 10.0.0.2:5060;branch=z9hG4bK1',
+    'Authorization: Digest username="1001", realm="pbx.example", nonce="abc123", uri="sip:pbx.example", response="deadbeefcafe", algorithm=MD5, cnonce="xyz", qop=auth, nc=00000001',
+    'proxy-authorization: Digest username="1001",nonce=plainnonce,response=0011',
+    'Content-Length: 0',
+    '',
+    '',
+  ].join('\r\n');
+  const out = log.redactSip(msg);
+  assert.ok(out.includes('username="1001"'));
+  assert.ok(out.includes('realm="pbx.example"'));
+  assert.ok(out.includes('nonce="[redacted]"'));
+  assert.ok(out.includes('response="[redacted]"'));
+  assert.ok(out.includes('cnonce="[redacted]"'));
+  assert.ok(out.includes('nonce=[redacted]') && out.includes('response=[redacted]'), 'unquoted values too');
+  assert.ok(!out.includes('deadbeefcafe') && !out.includes('abc123') && !out.includes('plainnonce'));
+  assert.ok(out.includes('Via: SIP/2.0/UDP 10.0.0.2:5060;branch=z9hG4bK1'), 'other headers are untouched');
+
+  const challenge = 'SIP/2.0 401 Unauthorized\r\nWWW-Authenticate: Digest realm="pbx.example", nonce="server-nonce", algorithm=MD5\r\n\r\n';
+  assert.ok(!log.redactSip(challenge).includes('server-nonce'));
+
+  // And it is applied on the way into the file. (The rotation test above
+  // left a tiny size cap behind; lift it so this long line is not rotated away.)
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twinline-log-'));
+  log.init(dir, { maxBytes: 1e6 });
+  log.setTraceSip(true);
+  log.child('t').sip('->', msg, { address: '1.2.3.4', port: 5060 });
+  log.setTraceSip(false);
+  const text = fs.readFileSync(path.join(dir, 'twinline.log'), 'utf8');
+  assert.ok(text.includes('username="1001"') && !text.includes('deadbeefcafe'));
+});
+
 test('errors serialise with their code', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twinline-log-'));
   log.init(dir);

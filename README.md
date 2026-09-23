@@ -16,11 +16,12 @@ Download the latest release from
 [github.com/gxmonto/twinline/releases](https://github.com/gxmonto/twinline/releases):
 
 - Windows: `TwinLine-Installer-<version>.exe` (`TwinLine-Portable-<version>.exe` is for a quick
-  try — don't use it day to day, it breaks if launched twice).
+  try — the installer gets automatic updates).
 - Debian/Ubuntu: `.deb`; Fedora/RHEL: `.rpm`; anything else: `.AppImage`.
 
 Windows shows a SmartScreen warning on the first install because the build is
-not code-signed; choose *More info → Run anyway*. After that, updates arrive
+not code-signed; choose *More info → Run anyway*. Every release includes a
+`SHA256SUMS.txt` if you want to check a download first. After that, updates arrive
 through the app.
 
 ## Set up a line
@@ -110,7 +111,8 @@ and what is *not* covered are in [SECURITY.md](SECURITY.md).
 ## Troubleshooting
 
 - **Logs**: Settings → General → *Open log folder*. *Record every SIP message*
-  adds a full SIP trace for provider problems (turn it off afterwards).
+  adds a full SIP trace for provider problems (turn it off afterwards; it
+  shows your usernames and numbers, though digest responses are masked).
 - **Lines drop after sleep, VPN or Wi-Fi changes**: TwinLine re-registers on
   its own; *Re-register lines now* forces it.
 - **Popup stuck on a missing display**: Settings → General → *Reset to default
