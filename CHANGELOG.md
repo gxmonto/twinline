@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 — 2026-09-23
+
+Clearer downloads: the Windows files are now named TwinLine-Installer and TwinLine-Portable, and each release page starts with a table saying which file to pick. The .yml and .blockmap files stay — the built-in updater reads them to download only what changed.
+
 ## 1.2.0 — 2026-09-23
 
 Transcription is much faster and more accurate. The new default engine, Parakeet, recognises an utterance in a fraction of a second, handles English and Spanish (and 23 other languages) without guessing the language first, and adds punctuation. Download it once in Settings → Transcription (~670 MB); anyone on a Whisper model is moved to it automatically. The start-of-transcription tone is gone.
