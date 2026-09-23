@@ -412,7 +412,8 @@ function stringify(msg) {
   if (msg.status !== undefined) {
     out = `${msg.version || 'SIP/2.0'} ${msg.status} ${msg.reason || reasonPhrase(msg.status)}\r\n`;
   } else {
-    out = `${msg.method} ${typeof msg.uri === 'string' ? msg.uri : stringifyUri(msg.uri)} ${msg.version || 'SIP/2.0'}\r\n`;
+    const uri = (typeof msg.uri === 'string' ? msg.uri : stringifyUri(msg.uri)).replace(/[\s]+/g, '');
+    out = `${msg.method} ${uri} ${msg.version || 'SIP/2.0'}\r\n`;
   }
 
   const body = msg.body || '';
@@ -425,7 +426,10 @@ function stringify(msg) {
     if (!values || emitted.has(name)) return;
     emitted.add(name);
     const label = canonicalName(name);
-    for (const v of values) out += `${label}: ${v}\r\n`;
+    // A CR or LF inside a value (a display name, a dialled string) would end
+    // the header early and let the rest be read as further headers. Fold them
+    // into spaces so no value can inject headers into the message.
+    for (const v of values) out += `${label}: ${String(v).replace(/[\r\n]+/g, ' ')}\r\n`;
   };
 
   for (const name of HEADER_ORDER) emit(name);

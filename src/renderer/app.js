@@ -216,6 +216,14 @@ function wireEvents() {
   // Chromium knows when connectivity comes back; the SIP stack does not.
   window.addEventListener('online', () => guard(api.network.refresh('browser online event')));
 
+  // sip:/tel: links fill the dialler; the user presses Call.
+  api.on.dialPrefill(({ target }) => {
+    if (PANEL) return;
+    $('dialInput').value = target;
+    $('dialInput').focus();
+    toast(`Number from link: ${target}. Press Call to dial.`);
+  });
+
   // Transcription
   api.on.transcriptStarted(onTranscriptStarted);
   api.on.transcriptLine(onTranscriptLine);
@@ -569,7 +577,10 @@ function updateRingtone() {
   if (PANEL) return;                       // only the main window makes sound
   const incoming = state.calls.some((c) => c.state === 'incoming');
   const outgoingRinging = state.calls.some((c) => c.state === 'ringing');
-  if (incoming) audio.startRinging('ring');
+  const talking = state.calls.some((c) => c.state === 'connected' && !c.localHold);
+  // A second call while one is up gets a soft call-waiting beep in the
+  // earpiece, not the full ringtone over the conversation.
+  if (incoming) audio.startRinging(talking ? 'waiting' : 'ring');
   else if (outgoingRinging) audio.startRinging('ringback');
   else audio.stopRinging();
 }
@@ -709,6 +720,10 @@ function renderSettingsAccounts() {
         <input type="number" id="${p}_localPort" min="0" max="65535"></label>
       <label class="field"><span>Public IP override <em>(only if NAT detection fails)</em></span>
         <input type="text" id="${p}_publicAddress"></label>
+      <label class="check"><input type="checkbox" id="${p}_acceptFromServerOnly">
+        Ignore SIP messages that do not come from this server <em class="dim">(blocks scanners and spoofed calls; needs registration)</em></label>
+      <label class="check"><input type="checkbox" id="${p}_mediaStrictSource">
+        Ignore call audio that does not come from the address the server announced <em class="dim">(turn off only if you get one-way audio)</em></label>
       <p class="hint" data-status="${index}"></p>`;
 
     const set = (field, value) => { const el = $(`${p}_${field}`); if (el) el.value = value ?? ''; };
@@ -716,6 +731,8 @@ function renderSettingsAccounts() {
 
     check('enabled', account.enabled);
     check('register', account.register);
+    check('acceptFromServerOnly', account.acceptFromServerOnly !== false);
+    check('mediaStrictSource', account.mediaStrictSource !== false);
     for (const field of ['label', 'domain', 'username', 'authUsername', 'displayName',
       'outboundProxy', 'transport', 'registerExpires', 'keepAliveSeconds', 'dtmfMode',
       'holdDirection', 'localPort', 'publicAddress']) {
@@ -798,6 +815,8 @@ async function saveSettings() {
 
     account.enabled = checked('enabled');
     account.register = checked('register');
+    account.acceptFromServerOnly = checked('acceptFromServerOnly');
+    account.mediaStrictSource = checked('mediaStrictSource');
     account.label = value('label') || `Line ${index + 1}`;
     account.domain = value('domain').trim();
     account.username = value('username').trim();
@@ -906,23 +925,69 @@ function renderTranscript() {
   if (!record) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
 
-  $('transcriptWho').textContent = record.remoteName || record.remoteNumber || '';
+  $('transcriptWho').textContent = (record.parties && record.parties.length > 1)
+    ? `Conference · ${record.parties.join(', ')}`
+    : (record.remoteName || record.remoteNumber || '');
   const list = $('transcriptLines');
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
 
+  const multi = multiParty(record);
   list.innerHTML = record.lines.length
     ? record.lines.map((l) => `<li>
         <span class="t">${stamp(l.atMs)}</span>
-        <span class="s ${l.speaker}">${l.speaker === 'you' ? 'You' : 'Caller'}</span>
+        <span class="s ${l.speaker}" title="${esc(l.party || '')}">${esc(speakerLabel(l, multi))}</span>
         <span class="x">${esc(l.text)}${l.lang && l.lang !== 'en' ? `<small>${esc(l.lang)}</small>` : ''}</span>
       </li>`).join('')
     : `<li class="empty-line">${record.finished ? 'Nothing was said.' : 'Listening… lines appear when a speaker pauses.'}</li>`;
   if (atBottom) list.scrollTop = list.scrollHeight;
 
-  $('transcriptFoot').textContent = record.finished
-    ? (record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}` : 'Finished; nothing to save.')
-    : 'Recognition runs on this computer.';
+  renderTranscriptFoot(record);
   renderSpeaking(record);
+}
+
+const AUTO_CLOSE_SECONDS = 5;
+let autoClose = null;     // { callId, remaining, timer }
+
+/**
+ * Once a transcript has finished it is saved, so the panel counts down and
+ * puts itself away (a popped-out transcript window closes with it). "Keep
+ * open" cancels.
+ */
+function renderTranscriptFoot(record) {
+  const foot = $('transcriptFoot');
+  if (!record.finished) {
+    cancelAutoClose();
+    foot.textContent = 'Recognition runs on this computer.';
+    return;
+  }
+  const saved = record.file ? `Saved as ${record.file.replace(/\.json$/, '.txt')}.` : 'Finished; nothing to save.';
+  if (!autoClose || autoClose.callId !== record.callId) startAutoClose(record.callId);
+  if (!autoClose) { foot.textContent = saved; return; }
+
+  foot.innerHTML = `${esc(saved)} <span class="transcript-foot-actions">Closing in <b>${autoClose.remaining}</b> s
+    <button class="btn ghost small" id="btnTranscriptKeep">Keep open</button></span>`;
+  $('btnTranscriptKeep').onclick = () => { cancelAutoClose(); foot.textContent = saved; };
+}
+
+function startAutoClose(callId) {
+  cancelAutoClose();
+  autoClose = { callId, remaining: AUTO_CLOSE_SECONDS, timer: null };
+  autoClose.timer = setInterval(() => {
+    if (!autoClose) return;
+    autoClose.remaining -= 1;
+    if (autoClose.remaining <= 0) {
+      const id = autoClose.callId;
+      cancelAutoClose();
+      if (shownTranscript === id) { shownTranscript = null; renderTranscript(); }
+      return;
+    }
+    const b = $('transcriptFoot').querySelector('b');
+    if (b) b.textContent = String(autoClose.remaining);
+  }, 1000);
+}
+
+function cancelAutoClose() {
+  if (autoClose) { clearInterval(autoClose.timer); autoClose = null; }
 }
 
 function renderSpeaking(record) {
@@ -936,8 +1001,21 @@ function stamp(ms) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** In a conference, callers are told apart by contact, name or number. */
+function multiParty(record) {
+  const labels = new Set((record.lines || []).filter((l) => l.speaker === 'caller').map((l) => l.party || 'Caller'));
+  const known = new Set(record.parties || []);
+  return labels.size > 1 || known.size > 1;
+}
+
+function speakerLabel(line, multi) {
+  if (line.speaker === 'you') return 'You';
+  return multi && line.party ? line.party : 'Caller';
+}
+
 function transcriptToText(record) {
-  return record.lines.map((l) => `[${stamp(l.atMs)}] ${l.speaker === 'you' ? 'You' : 'Caller'}: ${l.text}`).join('\n');
+  const multi = multiParty(record);
+  return record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi)}: ${l.text}`).join('\n');
 }
 
 async function copyText(text) {
@@ -971,11 +1049,11 @@ async function renderSavedTranscripts() {
   $('transcriptList').innerHTML = list.length
     ? list.map((t) => `<li>
         <span class="dir">&#9998;</span>
-        <span class="who">${esc(t.remoteName || t.remoteNumber || 'Unknown')} <small style="color:var(--text-dim)">· ${t.lines} lines</small></span>
+        <span class="who">${esc(t.remoteName || t.remoteNumber || 'Unknown')} <small class="dim">· ${t.lines} lines</small></span>
         <span class="when">${new Date(t.startedAt).toLocaleString()}</span>
         <button class="btn ghost small" data-tfile="${esc(t.file)}">Open</button>
       </li>`).join('')
-    : '<li><span class="who" style="color:var(--text-dim)">No transcripts yet. Press <b>Transcribe</b> on a connected call.</span></li>';
+    : '<li><span class="who dim">No transcripts yet. Press <b>Transcribe</b> on a connected call.</span></li>';
   for (const b of $('transcriptList').querySelectorAll('button[data-tfile]')) {
     b.onclick = () => openTranscriptFile(b.dataset.tfile);
   }
@@ -1027,8 +1105,8 @@ function renderModelRows() {
   $('trModelRows').innerHTML = rows.map((m) => {
     const p = m.progress;
     const action = m.downloading
-      ? `<span class="bar"><span style="width:${p ? p.percent : 0}%"></span></span>
-         <span style="color:var(--text-dim)">${p && p.total ? `${Math.round(p.received / 1e6)} / ${Math.round(p.total / 1e6)} MB` : '…'}</span>
+      ? `<span class="bar"><span data-width="${p ? p.percent : 0}"></span></span>
+         <span class="dim">${p && p.total ? `${Math.round(p.received / 1e6)} / ${Math.round(p.total / 1e6)} MB` : '…'}</span>
          <button class="btn ghost small" data-mcancel="${esc(m.id)}">Cancel</button>`
       : m.installed
         ? `<span class="tag green">Installed · ${m.sizeOnDiskMB} MB</span>
@@ -1041,6 +1119,7 @@ function renderModelRows() {
     '<p class="hint">The 1 MB voice-activity detector is fetched together with the model.</p>');
 
   const root = $('trModelRows');
+  applyWidths(root);
   for (const b of root.querySelectorAll('[data-mdownload]')) b.onclick = () => { guard(api.models.download(b.dataset.mdownload)); renderSettingsTranscription(); };
   for (const b of root.querySelectorAll('[data-mcancel]')) b.onclick = () => guard(api.models.cancel(b.dataset.mcancel)).then(renderSettingsTranscription);
   for (const b of root.querySelectorAll('[data-mremove]')) b.onclick = () => {
@@ -1085,7 +1164,7 @@ function renderUpdate(status) {
     case 'downloading': {
       const pct = Math.round((status.progress && status.progress.percent) || 0);
       html = `<span class="text">Downloading TwinLine <b>${v}</b>… ${pct}%</span>`
-        + `<span class="bar"><span style="width:${pct}%"></span></span>`;
+        + `<span class="bar"><span data-width="${pct}"></span></span>`;
       break;
     }
     case 'downloaded':
@@ -1105,6 +1184,7 @@ function renderUpdate(status) {
   banner.className = `update-banner ${cls} ${html ? '' : 'hidden'}`.trim();
   banner.innerHTML = html || '';
   for (const b of banner.querySelectorAll('button[data-update]')) b.onclick = () => onUpdateAction(b.dataset.update);
+  applyWidths(banner);
 
   // The same actions inside Settings, so "check → download → restart" never
   // requires closing the dialog to reach the banner.
@@ -1113,7 +1193,7 @@ function renderUpdate(status) {
     let extra = '';
     if (status.state === 'available') extra = button('download', status.manualDownloadUrl ? 'Download page' : `Download ${v}`, 'btn primary small');
     else if (status.state === 'downloaded') extra = button('install', `Restart and install ${v}`, 'btn primary small');
-    else if (status.state === 'downloading') extra = `<span class="bar" style="width:120px;height:6px;border-radius:3px;background:var(--bg-input);overflow:hidden;display:inline-block;vertical-align:middle"><span style="display:block;height:100%;width:${Math.round((status.progress && status.progress.percent) || 0)}%;background:var(--accent)"></span></span>`;
+    else if (status.state === 'downloading') extra = `<span class="bar inline-bar"><span data-width="${Math.round((status.progress && status.progress.percent) || 0)}"></span></span>`;
     actions.innerHTML = `<button type="button" class="btn small" id="btnCheckUpdates" ${status.state === 'checking' ? 'disabled' : ''}>Check for updates now</button>${extra}`;
     $('btnCheckUpdates').onclick = async () => {
       $('updateStatus').textContent = 'Checking…';
@@ -1121,6 +1201,7 @@ function renderUpdate(status) {
       if (s) renderUpdate(s);
     };
     for (const b of actions.querySelectorAll('button[data-update]')) b.onclick = () => onUpdateAction(b.dataset.update);
+    applyWidths(actions);
   }
 
   if (settingsLine) {
@@ -1294,6 +1375,11 @@ async function refreshState() {
   if (snapshot) { state = snapshot; renderAll(); }
 }
 
+/** Progress bars carry their width as data-width because the CSP forbids inline style attributes. */
+function applyWidths(root) {
+  for (const el of root.querySelectorAll('[data-width]')) el.style.width = `${el.dataset.width}%`;
+}
+
 // ---- toasts -----------------------------------------------------------------
 
 const MAX_TOASTS = 4;
@@ -1330,5 +1416,5 @@ function toast(message, kind = '') {
 }
 
 boot().catch((err) => {
-  document.body.innerHTML = `<pre style="padding:16px;color:#e5484d">Failed to start: ${esc(err.stack || err.message)}</pre>`;
+  document.body.innerHTML = `<pre class="fatal">Failed to start: ${esc(err.stack || err.message)}</pre>`;
 });

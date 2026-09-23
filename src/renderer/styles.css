@@ -306,7 +306,7 @@ input, select { font: inherit; }
 .transcript-lines li { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid rgba(255, 255, 255, 0.04); font-size: 12.5px; line-height: 1.4; }
 .transcript-lines li:first-child { border-top: 0; }
 .transcript-lines .t { color: var(--text-dim); font-size: 11px; flex: 0 0 38px; padding-top: 2px; }
-.transcript-lines .s { flex: 0 0 48px; font-weight: 600; }
+.transcript-lines .s { flex: 0 0 auto; min-width: 48px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .transcript-lines .s.you { color: var(--accent); }
 .transcript-lines .s.caller { color: var(--green); }
 .transcript-lines .x { flex: 1 1 auto; }
@@ -561,6 +561,14 @@ input, select { font: inherit; }
 
 .export-menu { display: flex; gap: 4px; align-items: center; }
 .export-menu span { font-size: 11.5px; color: var(--text-dim); }
+
+/* ---- misc utility classes (the CSP forbids inline style attributes) ------- */
+
+.dim { color: var(--text-dim); }
+.fatal { padding: 16px; color: var(--red); white-space: pre-wrap; }
+.bar.inline-bar { width: 120px; height: 6px; border-radius: 3px; background: var(--bg-input); overflow: hidden; display: inline-block; vertical-align: middle; }
+.bar.inline-bar span { display: block; height: 100%; background: var(--accent); }
+.transcript-foot-actions { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; }
 
 /* ---- popped-out panels -------------------------------------------------- */
 

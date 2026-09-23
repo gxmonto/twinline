@@ -34,6 +34,8 @@ function defaultAccount(index) {
     dtmfMode: 'rfc2833',
     holdDirection: 'sendonly',
     publicAddress: '',
+    acceptFromServerOnly: true,
+    mediaStrictSource: true,
   };
 }
 
@@ -203,11 +205,14 @@ function migrate(data) {
 }
 
 /** Deep-merge `value` over `defaults`, keeping the defaults' shape. */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function mergeDefaults(value, defaults) {
   if (Array.isArray(defaults)) return Array.isArray(value) ? value : defaults.slice();
   if (defaults && typeof defaults === 'object') {
     const out = {};
     for (const key of new Set([...Object.keys(defaults), ...Object.keys(value || {})])) {
+      if (UNSAFE_KEYS.has(key)) continue;         // never let saved JSON reach Object.prototype
       out[key] = key in defaults
         ? mergeDefaults(value ? value[key] : undefined, defaults[key])
         : (value ? value[key] : undefined);

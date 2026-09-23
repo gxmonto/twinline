@@ -1,7 +1,7 @@
 {
   "name": "twinline",
   "productName": "TwinLine",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
   "main": "src/main/main.js",
   "author": {
@@ -28,7 +28,7 @@
     "release": "node tools/release.js"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
+    "electron": "^44.4.5",
     "electron-builder": "^25.1.8"
   },
   "build": {

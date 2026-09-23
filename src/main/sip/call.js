@@ -140,7 +140,12 @@ class Call extends EventEmitter {
     // EADDRNOTAVAIL once that IP changes (DHCP, VPN, Wi-Fi roam, resume). The
     // address we *advertise* in SDP is a separate matter (mediaAdvertisedAddress).
     const wildcard = String(this.ua.mediaAddress).includes(':') ? '::' : '0.0.0.0';
-    this.rtp = await this.ua.audio.createLeg(this.id, { localAddress: wildcard });
+    this.rtp = await this.ua.audio.createLeg(this.id, {
+      localAddress: wildcard,
+      strictSource: this.ua.config.mediaStrictSource !== false,
+    });
+    this.rtp.on('unexpectedSource', (from) =>
+      this.ua.log.warn('dropped RTP from unexpected source', { call: this.id.slice(0, 8), from, expected: this.rtp.expected }));
     return this.rtp;
   }
 

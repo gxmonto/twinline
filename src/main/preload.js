@@ -152,5 +152,6 @@ contextBridge.exposeInMainWorld('twinline', {
     windowState: (fn) => on('window:state', fn),
     settings: (fn) => on('settings', fn),
     contactsChanged: (fn) => on('contacts:changed', fn),
+    dialPrefill: (fn) => on('dial:prefill', fn),
   },
 });

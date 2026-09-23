@@ -92,11 +92,12 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       // Keep the 20 ms audio loop running when the window is in the background.
       backgroundThrottling: false,
     },
   });
+  harden(mainWindow);
 
   mainWindow.setMenuBarVisibility(false);
   const sendWindowState = () => send('window:state', { maximized: mainWindow.isMaximized() });
@@ -119,12 +120,6 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
-
-  // External links open in the user's browser, never in the app window.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
 
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
@@ -279,10 +274,11 @@ function createPopup(height) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });
+  harden(popupWindow);
   popupWindow.setAlwaysOnTop(true, 'screen-saver');
   popupWindow.setVisibleOnAllWorkspaces?.(true);
   popupWindow.loadFile(path.join(__dirname, '..', 'renderer', 'popup.html'));
@@ -480,9 +476,10 @@ function openPanel(name, params = {}) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
+  harden(win);
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
     query: { panel: name, ...Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) },
@@ -504,10 +501,29 @@ function updatePowerBlocker() {
   }
 }
 
+/**
+ * A sip:/tel: link from a browser or another program fills in the dialler and
+ * brings the window up; it never dials by itself. Otherwise any web page could
+ * make the phone call a premium number.
+ */
 function handleDialLink(link) {
-  if (!manager) return;
-  const target = link.replace(/^tel:/i, '');
-  manager.dial(target).catch((err) => send('error', { message: err.message }));
+  const target = String(link).replace(/^tel:/i, '').replace(/[\r\n\s]/g, '').slice(0, 256);
+  if (!target) return;
+  focusWindow();
+  send('dial:prefill', { target });
+}
+
+/** Renderer hardening shared by every window. */
+function harden(win) {
+  // Our pages are local files; nothing should ever navigate them elsewhere.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
+  });
+  win.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 async function bootstrap() {
