@@ -40,6 +40,13 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npx electron-builder --publish never
+      # Boot the AppImage that was just built: the 1.4.2 audit's H1 was in the
+      # AppImage runtime, so the packaged Linux artefact itself must start.
+      # (No FUSE on the runner, hence extract-and-run.)
+      - name: Boot the AppImage
+        if: runner.os == 'Linux'
+        env: { APPIMAGE_EXTRACT_AND_RUN: '1' }
+        run: xvfb-run --auto-servernum dist/*/TwinLine-*.AppImage --smoke --no-sandbox
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-packages
