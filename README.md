@@ -15,7 +15,7 @@ A two-line SIP softphone for Windows and Linux, in the spirit of MicroSIP.
 Download the latest release from
 [github.com/gxmonto/twinline/releases](https://github.com/gxmonto/twinline/releases):
 
-- Windows: `TwinLine-Setup-<version>.exe` (the portable `.exe` is for a quick
+- Windows: `TwinLine-Installer-<version>.exe` (`TwinLine-Portable-<version>.exe` is for a quick
   try — don't use it day to day, it breaks if launched twice).
 - Debian/Ubuntu: `.deb`; Fedora/RHEL: `.rpm`; anything else: `.AppImage`.
 
