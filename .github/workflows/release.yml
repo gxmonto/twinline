@@ -66,8 +66,26 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          V="${TAG#v}"
           # electron-builder titles the draft with the version; find it by tag.
           gh release view "$TAG" --json isDraft,assets --jq '.assets[].name'
-          gh release edit "$TAG" --draft=false --latest --notes-file release-notes.md --title "TwinLine ${TAG#v}"
+          # Release text: a "which file do I download?" section, then the notes.
+          {
+            echo "## Downloads"
+            echo
+            echo "| Platform | File |"
+            echo "|---|---|"
+            echo "| **Windows** | \`TwinLine-Installer-${V}.exe\` — recommended. \`TwinLine-Portable-${V}.exe\` runs without installing (for a quick try; do not launch it twice). |"
+            echo "| Debian / Ubuntu | \`twinline_${V}_amd64.deb\` |"
+            echo "| Fedora / RHEL | \`twinline-${V}.x86_64.rpm\` |"
+            echo "| Other Linux | \`TwinLine-${V}.AppImage\` |"
+            echo
+            echo "_The \`.yml\` and \`.blockmap\` files are read by TwinLine's built-in updater; you never need to download them. Windows may show a SmartScreen warning on first install (More info → Run anyway)._"
+            echo
+            echo "## What's new"
+            echo
+            cat release-notes.md
+          } > /tmp/notes.md
+          gh release edit "$TAG" --draft=false --latest --notes-file /tmp/notes.md --title "TwinLine ${V}"
           echo "Published $TAG with assets:"
           gh release view "$TAG" --json assets --jq '.assets[].name'

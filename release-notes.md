@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+Clearer downloads: the Windows files are now named TwinLine-Installer and TwinLine-Portable, and each release page starts with a table saying which file to pick. The .yml and .blockmap files stay — the built-in updater reads them to download only what changed.

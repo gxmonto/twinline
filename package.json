@@ -1,7 +1,7 @@
 {
   "name": "twinline",
   "productName": "TwinLine",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
   "main": "src/main/main.js",
   "author": {
@@ -71,7 +71,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "TwinLine"
+      "shortcutName": "TwinLine",
+      "artifactName": "TwinLine-Installer-${version}.exe"
     },
     "linux": {
       "target": [
@@ -139,7 +140,10 @@
       "node_modules/sherpa-onnx-node/**",
       "node_modules/sherpa-onnx-*/**",
       "src/main/transcribe/**"
-    ]
+    ],
+    "portable": {
+      "artifactName": "TwinLine-Portable-${version}.exe"
+    }
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
