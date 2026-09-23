@@ -38,7 +38,8 @@ override** if your provider does not echo `rport`.
 - **Dial**: pick the line, type a number, press Enter. Digits and `*` `#`
   also type into the field, or send DTMF during a call.
 - **Second call**: dial or answer again; the first call goes on hold. *Resume*
-  swaps back.
+  swaps back. A call arriving while you are talking plays a soft call-waiting
+  beep, not the full ringtone.
 - **Conference**: with two calls connected, press *Conference*. *Join conf*
   adds a third. In the conference panel, *Hold* parks one party (they rejoin
   on *Resume*) and *Drop* hangs up on that party only. *Split* keeps everyone
@@ -70,8 +71,10 @@ TwinLine speaks **G.711**, the codec every SIP provider and PBX supports:
 
 Press **Transcribe** on a connected call, or turn on automatic transcription
 in Settings → Transcription. Lines appear as each speaker pauses, labelled
-*You* / *Caller*, and the transcript is saved with the call (History →
-*Transcript*, or the *Saved transcripts* list).
+*You* / *Caller* — or by contact name or number for each participant of a
+conference — and the transcript is saved with the call (History →
+*Transcript*, or the *Saved transcripts* list). When the call ends the panel
+counts down five seconds and closes; *Keep open* stops it.
 
 Everything runs on your own machine — audio never leaves it. Download a model
 once in Settings → Transcription. **Parakeet** (~670 MB) is the one to use:
@@ -89,6 +92,14 @@ every party's consent. A red *Transcribing* tag shows while it runs.
 TwinLine checks GitHub Releases on start and every six hours. Settings →
 General → Updates lets you check now, download, and restart to install, or
 switch to automatic downloads. It never installs while a call is up.
+
+## Security
+
+Every window runs sandboxed; a line ignores SIP and call audio that do not
+come from its own server (per-line switches under Settings → Line — turn off
+only if a provider relays media from another address); updates and speech
+models are checksum-verified; call audio on the network is plain RTP. Details
+and what is *not* covered are in [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 

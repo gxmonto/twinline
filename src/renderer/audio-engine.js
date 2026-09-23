@@ -113,6 +113,7 @@ export class RendererAudio {
     if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); this.capture = null; }
     if (this.source) { this.source.disconnect(); this.source = null; }
     if (this.playback) { this.playback.disconnect(); this.playback = null; }
+    if (this.ringContext === this.context) this.ringContext = null;   // shared; closes below
     if (this.context) { await this.context.close().catch(() => {}); this.context = null; }
     this.started = false;
   }
@@ -136,12 +137,25 @@ export class RendererAudio {
 
   // ---- local tones --------------------------------------------------------
 
+  /**
+   * Where tones play. When the ringtone device is the call device, tones go
+   * through the call's own AudioContext: one audio session instead of two, so
+   * Windows' "communications" ducking has nothing to lower and levels stay
+   * consistent. A separate ringtone device needs its own context.
+   */
   async _ensureRingContext() {
-    if (this.ringContext) return this.ringContext;
+    const ringId = this.settings.ringtoneDeviceId || 'default';
+    const outId = this.settings.outputDeviceId || 'default';
+    const sameDevice = ringId === 'default' || ringId === outId;
+    if (sameDevice && this.context && this.context.state !== 'closed') {
+      if (this.ringContext && this.ringContext !== this.context) { this.ringContext.close().catch(() => {}); }
+      this.ringContext = this.context;
+      return this.context;
+    }
+    if (this.ringContext && this.ringContext !== this.context && this.ringContext.state !== 'closed') return this.ringContext;
     this.ringContext = new AudioContext();
-    const id = this.settings.ringtoneDeviceId;
-    if (id && id !== 'default' && typeof this.ringContext.setSinkId === 'function') {
-      try { await this.ringContext.setSinkId(id); } catch { /* fall back to default */ }
+    if (ringId !== 'default' && typeof this.ringContext.setSinkId === 'function') {
+      try { await this.ringContext.setSinkId(ringId); } catch { /* fall back to default */ }
     }
     return this.ringContext;
   }
@@ -168,7 +182,10 @@ export class RendererAudio {
     // from another room; ringback is the North American 2 s / 4 s cadence.
     const pattern = kind === 'ringback'
       ? { tones: [440, 480], bursts: [[2.0, 4.0]], level: 0.12 }
-      : { tones: [523.25, 659.25], bursts: [[0.4, 0.2], [0.4, 2.0]], level: Math.max(0.02, this.settings.ringVolume) * 0.35 };
+      : kind === 'waiting'
+        // Call waiting: two short soft beeps every few seconds, under the conversation.
+        ? { tones: [440], bursts: [[0.18, 0.18], [0.18, 3.5]], level: Math.max(0.02, this.settings.ringVolume) * 0.12 }
+        : { tones: [523.25, 659.25], bursts: [[0.4, 0.2], [0.4, 2.0]], level: Math.max(0.02, this.settings.ringVolume) * 0.35 };
 
     const oscillators = pattern.tones.map((freq) => {
       const osc = ctx.createOscillator();

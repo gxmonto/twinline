@@ -97,9 +97,30 @@ function fetchText(url, redirects = 5) {
 function feedFromUrl(url) {
   const u = String(url || '').trim();
   if (!u) return null;
-  const gh = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)/i.exec(u);
+  let parsed;
+  try { parsed = new URL(u); } catch { throw new Error('Update server must be a full URL (https://…).'); }
+  // An installer fetched over plain HTTP could be swapped on the way in and
+  // its manifest with it, so http is only allowed for a machine on the local
+  // network — the case for rehearsing an update with tools/serve-updates.js.
+  if (parsed.protocol === 'http:' && !isLocalNetwork(parsed.hostname)) {
+    throw new Error('Update server must use https:// (plain http is only allowed for local-network addresses).');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Update server must be an http(s) URL.');
+  }
+  const gh = /^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/i.exec(u);
   if (gh) return { provider: 'github', owner: gh[1], repo: gh[2].replace(/\.git$/, '') };
   return { provider: 'generic', url: u.replace(/\/+$/, '') };
+}
+
+/** Loopback or RFC 1918 / link-local — places an attacker on the internet cannot sit. */
+function isLocalNetwork(host) {
+  const h = String(host).replace(/^\[|\]$/g, '').toLowerCase();
+  if (h === 'localhost' || h === '::1' || h.endsWith('.local')) return true;
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
 }
 
 /** Where the Linux manifest lives for a given feed. */
@@ -141,7 +162,13 @@ class Updater extends EventEmitter {
 
   configure(updateSettings) {
     this.settings = { mode: 'ask', url: '', ...updateSettings };
-    this.feed = feedFromUrl(this.settings.url);
+    try {
+      this.feed = feedFromUrl(this.settings.url);
+    } catch (err) {
+      this.feed = null;
+      this._set({ state: 'error', error: err.message });
+      log.warn('update server rejected', { url: this.settings.url, error: err.message });
+    }
     if (this._auto && this.feed) {
       try { this._auto.setFeedURL(this.feed); } catch (err) { log.warn('setFeedURL failed', err); }
     }
@@ -272,7 +299,9 @@ class Updater extends EventEmitter {
 
   async download() {
     if (this.status.manualDownloadUrl) {
-      await shell.openExternal(this.status.manualDownloadUrl);
+      // Only ever hand the browser a web URL from the manifest, never a scheme
+      // that could run something.
+      if (/^https?:\/\//i.test(this.status.manualDownloadUrl)) await shell.openExternal(this.status.manualDownloadUrl);
       return this.status;
     }
     const auto = this._autoUpdater();
@@ -337,4 +366,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl };
+module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork };

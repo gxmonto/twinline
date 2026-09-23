@@ -48,7 +48,9 @@ Rules:
 - Bump the minor for features, patch for fixes. History: 1.0.0 first build →
   1.0.1 legacy-hold fix → 1.0.2 tray icon → 1.0.3 network re-registration +
   logging → 1.0.4 in-app updates → 1.1.0 transcription (Whisper) → 1.2.0
-  Parakeet engine, frameless window → 1.2.1 artefact names → 1.3.0 pop-out panels.
+  Parakeet engine, frameless window → 1.2.1 artefact names → 1.3.0 pop-out panels →
+  1.4.0 security review, Electron 44, conference-wide transcription, call-waiting
+  tone, transcript auto-close.
 
 ## Architecture in one breath
 
@@ -90,8 +92,15 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   still valid; only a real failure changes the chip (it flickered amber before).
 - **Errors**: RTP send errors are reported once per code per 30 s; toasts
   collapse repeats into "×N", max four. Never let a per-frame error toast.
-- **Transcription channels**: microphone and each caller are separate streams,
-  so *You*/*Caller* labels need no diarisation. Default model is Parakeet-TDT
+- **Transcription channels**: microphone and each *party* are separate streams
+  (`participants(callId)` from the CallManager lists every conference member,
+  labelled by contact/name/number), so *You*/*Caller*/per-party labels need
+  no diarisation. One conference = one transcript (`mergeConference` keeps the
+  earliest). A finished transcript auto-closes after 5 s unless "Keep open".
+- **Call waiting**: an incoming call during a live call plays a soft beep
+  (`waiting` pattern), not the ringtone; tones share the call's AudioContext
+  when the ringtone device is the speaker device, so Windows communications
+  ducking has nothing to lower (Mike reported audio dropping on a second call). Default model is Parakeet-TDT
   0.6B v3 int8 (`nemo_transducer`, featureDim 128; ~130–260 ms per utterance
   on a Ryzen 7 5800U). Whisper stays selectable but was 5–10 s per utterance
   on Mike's i7 laptop and mislabelled Spanish as Portuguese/Hindi/Thai (its
@@ -118,6 +127,36 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - Passwords are encrypted with `safeStorage` (DPAPI on Windows), so a copied
   `settings.json` does not carry them to another machine.
 
+## Security posture (1.4.0 review — keep it this way)
+
+- All BrowserWindows: `sandbox: true`, `contextIsolation`, no Node integration;
+  `harden(win)` blocks non-file navigation, webviews and window.open. The CSP
+  in index.html forbids inline scripts *and* inline style attributes — set
+  widths via `data-width` + `applyWidths()` or CSS classes, never `style=""`
+  inside innerHTML.
+- `sip:`/`tel:` links only prefill the dialler (`dial:prefill`); never auto-dial.
+- SIP: `parser.stringify` folds CR/LF in header values (header injection);
+  per-line `acceptFromServerOnly` (default on, only meaningful with register)
+  drops requests from other hosts silently; TLS targets carry `serverName`
+  for SNI and hostname verification.
+- RTP: per-line `mediaStrictSource` (default on) — packets must come from the
+  SDP address (port may change); after latching, a different address is
+  rejected even with strict off. `unexpectedSource` is logged once per 30 s.
+  If a provider relays media from an address other than its SDP `c=`, users
+  turn the switch off — that is the diagnosis for sudden one-way audio.
+- Updater: a custom feed must be https unless loopback/RFC 1918
+  (`feedFromUrl`); `openExternal` only for http(s). Models: size + SHA-256
+  pinned in `models.js` CATALOG and verified on download — refresh the pins if
+  upstream files change (`huggingface.co/api/models/<repo>?blobs=true` →
+  `lfs.sha256`).
+- Settings merge skips `__proto__`/`constructor`/`prototype`. CSV export
+  defuses formulas (`=`, `@`, and `+`/`-` not followed by a number); phone
+  numbers must keep their `+`.
+- Electron 44 (from 33 in 1.4.0). `npm audit --omit=dev` must stay clean;
+  dev-chain findings are build-time only.
+- Not covered, by design: RTP is unencrypted (no SRTP); no code signing yet.
+  `SECURITY.md` is the user-facing statement — keep it truthful.
+
 ## Open items and known gaps
 
 - One report (1.1.0, Whisper) of the user's own voice not appearing in a
@@ -126,8 +165,6 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - Spanish recognition is verified only by Parakeet's documentation; no Spanish
   TTS voice exists on Mike's PC to synthesise a test. English is verified
   end-to-end (Windows TTS sample through the 8 kHz µ-law path).
-- In a conference every remote party is labelled *Caller*; per-party labels
-  (by number/contact) would be a small follow-up.
 - Code signing: `release.yml` already reads `WIN_CSC_LINK` /
   `WIN_CSC_KEY_PASSWORD` secrets; Mike may buy a certificate later.
 - Linux packages are built and inspected (deb/rpm metadata, desktop entry with

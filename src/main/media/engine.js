@@ -99,12 +99,13 @@ class AudioEngine extends EventEmitter {
   }
 
   /** Create and bind an RTP session for a call leg. */
-  async createLeg(callId, { localAddress = '0.0.0.0' } = {}) {
+  async createLeg(callId, { localAddress = '0.0.0.0', strictSource = true } = {}) {
     if (this.sessions.has(callId)) return this.sessions.get(callId);
     const session = new RtpSession({
       localAddress,
       frameSamples: this.frameSamples,
       portRange: this.portRange,
+      strictSource,
     });
     await session.open();
     session.on('dtmf', (digit) => this.emit('dtmf', callId, digit));

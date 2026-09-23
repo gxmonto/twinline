@@ -31,6 +31,13 @@ class CallManager extends EventEmitter {
     this.contacts = contacts;                 // optional ContactStore for name lookup
     this.transcription = transcription;       // optional TranscriptionService
     if (transcription) {
+      // Whose audio belongs in a transcript: the call itself, or every member
+      // of the conference it is in, each labelled by contact, name or number.
+      transcription.participants = (callId) => {
+        const ids = this.conferenceIds.has(callId) ? [...this.conferenceIds] : [callId];
+        return ids.map((id) => this.calls.get(id)).filter((c) => c && c.state === 'connected')
+          .map((c) => ({ callId: c.id, label: this._contactName(c.remoteNumber) || c.remoteDisplayName || c.remoteNumber || 'Caller' }));
+      };
       transcription.on('finished', (t) => {
         // Attach the saved transcript to the matching history entry.
         const entry = this.history.find((h) => h.id === t.callId);
@@ -214,6 +221,7 @@ class CallManager extends EventEmitter {
     if (!this.transcription) throw new Error('transcription is not available');
     const call = this.call(callId);
     if (call.state !== 'connected') throw new Error('the call must be connected first');
+    if (this.transcription.isActive(callId)) return this._describe(call);   // covered by a conference transcript
     await this.transcription.start({
       callId: call.id,
       accountId: call.accountId,
@@ -386,6 +394,8 @@ class CallManager extends EventEmitter {
     await Promise.all(calls.map((c) => (c.localHold ? c.unhold().catch(() => {}) : null)));
 
     this._syncConference();
+    // One conference, one transcript: fold any per-call transcripts together.
+    if (this.transcription) await this.transcription.mergeConference([...this.conferenceIds]).catch(() => {});
     this._emitCalls();
     this.emit('conference', { members: [...this.conferenceIds] });
     return this.snapshot();

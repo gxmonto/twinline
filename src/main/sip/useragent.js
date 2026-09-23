@@ -34,6 +34,8 @@ const DEFAULTS = {
   holdDirection: 'sendonly',    // sendonly | inactive
   publicAddress: '',            // manual NAT override
   mediaPortRange: [16384, 32766],
+  acceptFromServerOnly: true,   // ignore SIP from anywhere but the registrar
+  mediaStrictSource: true,      // ignore RTP from anywhere but the SDP address
 };
 
 class UserAgent extends EventEmitter {
@@ -180,8 +182,11 @@ class UserAgent extends EventEmitter {
 
     const targets = await resolveTarget(parsed.host, parsed.port, this.transportType);
     if (!targets.length) throw new Error(`cannot resolve ${parsed.host}`);
-    this.targets = targets;
-    this.target = targets[0];
+    // TLS must verify the certificate against the configured host name, not
+    // the resolved IP; carry the name along for SNI and hostname checks.
+    const serverName = require('net').isIP(parsed.host) ? undefined : parsed.host;
+    this.targets = targets.map((t) => ({ ...t, serverName }));
+    this.target = this.targets[0];
     this.localAddress = await localAddressFor(this.target.address);
     this.log.info('resolved server', { target: this.target, localAddress: this.localAddress });
   }
@@ -558,7 +563,28 @@ class UserAgent extends EventEmitter {
 
   // ---- inbound ------------------------------------------------------------
 
+  /**
+   * With a registrar configured, every legitimate request reaches us through
+   * it. Anything from another address is a scanner or a spoofed call.
+   */
+  acceptsSource(address) {
+    if (!this.config.acceptFromServerOnly || !this.config.register) return true;
+    if (!this.target) return true;
+    return this.targets.some((t) => t.address === address) || address === this.target.address;
+  }
+
   _onRequest(request, txn, rinfo) {
+    if (!this.acceptsSource(rinfo.address)) {
+      // Drop silently: answering would tell a scanner there is a phone here.
+      this._dropped ??= new Map();
+      const last = this._dropped.get(rinfo.address) || 0;
+      if (Date.now() - last > 60000) {
+        this._dropped.set(rinfo.address, Date.now());
+        this.log.warn('ignored SIP request from unexpected source', { from: rinfo, method: request.method });
+      }
+      txn._terminate();
+      return;
+    }
     this.transactions.stampVia(request, rinfo);
     const method = request.method;
 

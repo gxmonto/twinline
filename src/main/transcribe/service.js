@@ -3,10 +3,10 @@
  * Main-process side of transcription: owns the worker utility process, taps
  * the audio engine, assembles transcripts and stores them.
  *
- * Channels: the microphone is one shared channel ("you"); each transcribed
- * call has its own remote channel ("caller"). A mic segment is appended to
- * every transcript that is live at that moment, which is exactly right for a
- * conference.
+ * Channels: the microphone is one shared channel ("you"). Each transcript has
+ * one channel per remote *party* — normally just the call itself, but in a
+ * conference every member, so every voice is recognised and labelled. Who the
+ * parties are is decided by the CallManager through `participants(callId)`.
  */
 
 const fs = require('fs');
@@ -36,6 +36,8 @@ class TranscriptionService extends EventEmitter {
     // Injectable for tests; the real thing is Electron's utilityProcess.fork.
     this.fork = fork || ((modulePath, args, options) => require('electron').utilityProcess.fork(modulePath, args, options));
     this.settings = { model: 'parakeet', language: 'auto', autoStart: false, threads: 0 };
+    /** Which calls' audio belongs in a transcript; set by the CallManager. */
+    this.participants = (callId) => [{ callId, label: 'Caller' }];
     /** Per-channel counters, so the log can say whether audio ever arrived. */
     this.counters = new Map();
 
@@ -45,7 +47,7 @@ class TranscriptionService extends EventEmitter {
     this._readyWaiters = [];
     this._closeWaiters = new Map();    // channel id -> resolve
 
-    /** @type {Map<string, object>} live transcripts by call id */
+    /** @type {Map<string, object>} live transcripts by owning call id */
     this.live = new Map();
     this.micUsers = 0;
     this.micOpenedAt = null;
@@ -81,8 +83,16 @@ class TranscriptionService extends EventEmitter {
     };
   }
 
+  /** The transcript that covers `callId`, as owner or as a conference party. */
+  recordFor(callId) {
+    const own = this.live.get(callId);
+    if (own) return own;
+    for (const record of this.live.values()) if (record.parties.has(callId)) return record;
+    return null;
+  }
+
   isActive(callId) {
-    return this.live.has(callId);
+    return this.recordFor(callId) !== null;
   }
 
   // ---- worker -------------------------------------------------------------
@@ -207,10 +217,13 @@ class TranscriptionService extends EventEmitter {
       this._count('mic', mic);
       if (mic) this.worker.postMessage({ type: 'audio', id: 'mic', samples: mic });
     }
-    for (const [callId] of this.live) {
-      const frame = legs.get(callId);
-      this._count(`${callId}|remote`, frame);
-      if (frame) this.worker.postMessage({ type: 'audio', id: `${callId}|remote`, samples: frame });
+    for (const record of this.live.values()) {
+      this._syncParties(record);
+      for (const [partyId, party] of record.parties) {
+        const frame = legs.get(partyId);
+        this._count(party.channel, frame);
+        if (frame) this.worker.postMessage({ type: 'audio', id: party.channel, samples: frame });
+      }
     }
   }
 
@@ -223,14 +236,46 @@ class TranscriptionService extends EventEmitter {
     for (let i = 0; i < frame.length; i += 8) { if (Math.abs(frame[i]) > 1000) { c.loud++; break; } }
   }
 
+  /**
+   * Open a channel for every party the CallManager says belongs in this
+   * transcript (conference members join and leave), close the ones that left.
+   */
+  _syncParties(record) {
+    const wanted = this.participants(record.callId);
+    const wantedIds = new Set(wanted.map((p) => p.callId));
+
+    for (const p of wanted) {
+      const existing = record.parties.get(p.callId);
+      if (existing) {
+        // Names can arrive later (a contact match, or a conference forming).
+        if (p.label && p.label !== existing.label) { existing.label = p.label; record.partyLabels[p.callId] = p.label; }
+        continue;
+      }
+      const channel = `${record.callId}|party:${p.callId}`;
+      record.parties.set(p.callId, { label: p.label || 'Caller', channel, openedAt: Date.now() });
+      record.partyLabels[p.callId] = p.label || 'Caller';
+      if (this.worker && this.workerState === 'ready') {
+        this.worker.postMessage({ type: 'open', id: channel, label: p.label || 'Caller', inputRate: 8000 });
+      }
+    }
+    for (const [id, party] of [...record.parties]) {
+      if (wantedIds.has(id)) continue;
+      record.parties.delete(id);
+      // Let the worker decode whatever that party said last; no need to wait.
+      if (this.worker && this.workerState === 'ready') this.worker.postMessage({ type: 'close', id: party.channel });
+    }
+  }
+
   // ---- transcripts --------------------------------------------------------
 
   /**
-   * Begin transcribing a connected call.
+   * Begin transcribing a connected call (and, if it is in a conference, the
+   * whole conference).
    * @param {object} info { callId, remoteNumber, remoteName, contactName, accountId, answeredAt }
    */
   async start(info) {
-    if (this.live.has(info.callId)) return this.live.get(info.callId);
+    const existing = this.recordFor(info.callId);
+    if (existing) return existing;
     await this._ensureWorker();
 
     const record = {
@@ -243,34 +288,50 @@ class TranscriptionService extends EventEmitter {
       model: this.settings.model,
       language: this.settings.language,
       lines: [],
+      parties: new Map(),          // partyCallId -> { label, channel, openedAt }
+      partyLabels: {},             // partyCallId -> label, kept after a party leaves
       speaking: { you: false, caller: false },
+      speakingParties: new Set(),
       finished: false,
       file: null,
     };
     this.live.set(info.callId, record);
 
-    this.worker.postMessage({ type: 'open', id: `${info.callId}|remote`, label: 'caller', inputRate: 8000 });
+    this._syncParties(record);
     if (this.micUsers++ === 0) {
       this.micOpenedAt = Date.now();
       this.worker.postMessage({ type: 'open', id: 'mic', label: 'you', inputRate: 8000 });
     }
-    record.remoteOpenedAt = Date.now();
     this._setTapping(true);
 
-    log.info('transcription started', { call: info.callId.slice(0, 8), remote: info.remoteNumber });
+    log.info('transcription started', { call: info.callId.slice(0, 8), remote: info.remoteNumber, parties: [...record.parties.keys()].map((k) => k.slice(0, 8)) });
     this.emit('started', this._public(record));
     return record;
   }
 
-  /** Stop transcribing a call; resolves once its last segment is decoded and saved. */
+  /**
+   * When calls are bridged into a conference, one transcript covers all of
+   * them. Keep the earliest and close the others.
+   */
+  async mergeConference(memberIds) {
+    const records = memberIds.map((id) => this.live.get(id)).filter(Boolean)
+      .sort((a, b) => a.startedAt - b.startedAt);
+    for (const extra of records.slice(1)) {
+      await this.stop(extra.callId, { reason: 'merged into the conference transcript' });
+    }
+    if (records[0]) { this._syncParties(records[0]); this.emit('started', this._public(records[0])); }
+    return records[0] ? this._public(records[0]) : null;
+  }
+
+  /** Stop the transcript covering `callId`; resolves once its last segment is decoded and saved. */
   async stop(callId, { reason = 'stopped' } = {}) {
-    const record = this.live.get(callId);
+    const record = this.recordFor(callId);
     if (!record || record.stopping) return record ? this._public(record) : null;
     record.stopping = true;
 
     const waits = [];
     if (this.worker && this.workerState === 'ready') {
-      waits.push(this._closeChannel(`${callId}|remote`));
+      for (const party of record.parties.values()) waits.push(this._closeChannel(party.channel));
       if (--this.micUsers === 0) waits.push(this._closeChannel('mic'));
     } else {
       this.micUsers = Math.max(0, this.micUsers - 1);
@@ -278,7 +339,7 @@ class TranscriptionService extends EventEmitter {
     if (this.micUsers === 0) this._setTapping(false);
 
     await Promise.all(waits);
-    return this._finish(callId, { reason });
+    return this._finish(record.callId, { reason });
   }
 
   _closeChannel(id) {
@@ -307,37 +368,50 @@ class TranscriptionService extends EventEmitter {
       this._idleTimer.unref?.();
     }
     // Counters answer "did audio from each side reach the engine at all?"
-    const remoteKey = `${callId}|remote`;
+    const audioCounts = { mic: this.counters.get('mic') || null };
+    for (const [id, party] of Object.entries(record.partyLabels)) {
+      const channel = `${callId}|party:${id}`;
+      audioCounts[party] = this.counters.get(channel) || null;
+      this.counters.delete(channel);
+    }
     log.info('transcription finished', {
       call: callId.slice(0, 8),
       lines: record.lines.length,
       you: record.lines.filter((l) => l.speaker === 'you').length,
-      caller: record.lines.filter((l) => l.speaker === 'caller').length,
-      audio: { mic: this.counters.get('mic') || null, remote: this.counters.get(remoteKey) || null },
+      callers: record.lines.filter((l) => l.speaker === 'caller').length,
+      audio: audioCounts,
       file: record.file && path.basename(record.file),
     });
-    this.counters.delete(remoteKey);
     if (!this.live.size) this.counters.delete('mic');
+
     const pub = this._public(record);
     this.emit('finished', pub);
     return pub;
   }
 
-  _onSegment(seg) {
-    const isMic = seg.channel === 'mic';
-    const absolute = (isMic ? this.micOpenedAt : null);
-    const targets = isMic
-      ? [...this.live.values()]
-      : [this.live.get(seg.channel.split('|')[0])].filter(Boolean);
+  /** Which transcript and party a worker channel id belongs to. */
+  _resolveChannel(channelId) {
+    if (channelId === 'mic') return { mic: true, records: [...this.live.values()] };
+    const bar = channelId.indexOf('|party:');
+    if (bar === -1) return { mic: false, records: [] };
+    const record = this.live.get(channelId.slice(0, bar));
+    const partyId = channelId.slice(bar + 7);
+    return { mic: false, records: record ? [record] : [], partyId };
+  }
 
-    for (const record of targets) {
-      const openedAt = isMic ? absolute : record.remoteOpenedAt;
+  _onSegment(seg) {
+    const { mic, records, partyId } = this._resolveChannel(seg.channel);
+    for (const record of records) {
+      const party = mic ? null : record.parties.get(partyId);
+      const openedAt = mic ? this.micOpenedAt : (party ? party.openedAt : record.startedAt);
       const atMs = Math.max(0, openedAt + seg.startMs - record.callAnsweredAt);
       // A mic utterance that started before this transcript began is not ours.
-      if (isMic && openedAt + seg.endMs < record.startedAt) continue;
+      if (mic && openedAt + seg.endMs < record.startedAt) continue;
       const line = {
         n: record.lines.length + 1,
-        speaker: isMic ? 'you' : 'caller',
+        speaker: mic ? 'you' : 'caller',
+        party: mic ? null : (record.partyLabels[partyId] || 'Caller'),
+        partyId: mic ? null : partyId,
         atMs,
         durationMs: seg.endMs - seg.startMs,
         text: seg.text,
@@ -350,21 +424,34 @@ class TranscriptionService extends EventEmitter {
   }
 
   _onSpeaking(msg) {
-    const isMic = msg.id === 'mic';
-    const targets = isMic ? [...this.live.values()] : [this.live.get(msg.id.split('|')[0])].filter(Boolean);
-    for (const record of targets) {
-      record.speaking[isMic ? 'you' : 'caller'] = msg.speaking;
-      this.emit('speaking', { callId: record.callId, speaker: isMic ? 'you' : 'caller', speaking: msg.speaking });
+    const { mic, records, partyId } = this._resolveChannel(msg.id);
+    for (const record of records) {
+      if (mic) record.speaking.you = msg.speaking;
+      else {
+        if (msg.speaking) record.speakingParties.add(partyId); else record.speakingParties.delete(partyId);
+        record.speaking.caller = record.speakingParties.size > 0;
+      }
+      this.emit('speaking', {
+        callId: record.callId,
+        speaker: mic ? 'you' : 'caller',
+        party: mic ? null : record.partyLabels[partyId],
+        speaking: mic ? msg.speaking : record.speaking.caller,
+      });
     }
   }
 
   _public(record) {
-    const { speaking, stopping, ...rest } = record;
-    return { ...rest, speaking: { ...speaking }, file: record.file ? path.basename(record.file) : null };
+    const { speaking, speakingParties, stopping, parties, ...rest } = record;
+    return {
+      ...rest,
+      speaking: { ...speaking },
+      parties: [...parties.values()].map((p) => p.label),
+      file: record.file ? path.basename(record.file) : null,
+    };
   }
 
   liveTranscript(callId) {
-    const record = this.live.get(callId);
+    const record = this.recordFor(callId);
     return record ? this._public(record) : null;
   }
 
@@ -379,7 +466,7 @@ class TranscriptionService extends EventEmitter {
     const json = path.join(this.dir, `${base}.json`);
     const txt = path.join(this.dir, `${base}.txt`);
 
-    const { speaking, stopping, ...toSave } = record;
+    const { speaking, speakingParties, stopping, parties, ...toSave } = record;
     fs.writeFileSync(json, JSON.stringify(toSave, null, 2));
     fs.writeFileSync(txt, formatTranscript(toSave));
     return json;
@@ -394,6 +481,7 @@ class TranscriptionService extends EventEmitter {
         return {
           file: f, callId: t.callId, remoteNumber: t.remoteNumber, remoteName: t.remoteName,
           startedAt: t.startedAt, endedAt: t.endedAt, lines: t.lines.length, accountId: t.accountId,
+          parties: Object.values(t.partyLabels || {}),
         };
       } catch { return null; }
     }).filter(Boolean).sort((a, b) => b.startedAt - a.startedAt);
@@ -421,8 +509,7 @@ class TranscriptionService extends EventEmitter {
   async testAudio(int16At8k) {
     await this._ensureWorker();
     const segments = [];
-    const onSeg = (seg) => { if (seg.channel === 'selftest') segments.push(seg); };
-    const listener = (msg) => { if (msg.type === 'segment') onSeg(msg); };
+    const listener = (msg) => { if (msg.type === 'segment' && msg.channel === 'selftest') segments.push(msg); };
     this.worker.on('message', listener);
     try {
       this.worker.postMessage({ type: 'open', id: 'selftest', label: 'test', inputRate: 8000 });
@@ -444,20 +531,35 @@ class TranscriptionService extends EventEmitter {
   }
 }
 
+/** Speaker label for a line: "You", or the party's name when more than one party spoke. */
+function speakerLabel(line, multiParty) {
+  if (line.speaker === 'you') return 'You';
+  return multiParty && line.party ? line.party : 'Caller';
+}
+
+function hasMultipleParties(record) {
+  const labels = new Set((record.lines || []).filter((l) => l.speaker === 'caller').map((l) => l.party || 'Caller'));
+  const known = new Set(Object.values(record.partyLabels || {}));
+  return labels.size > 1 || known.size > 1;
+}
+
 function formatTranscript(record) {
   const stamp = (ms) => {
     const s = Math.floor(ms / 1000);
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
   const who = record.remoteName ? `${record.remoteName} (${record.remoteNumber})` : record.remoteNumber;
+  const parties = Object.values(record.partyLabels || {});
   const head = [
     `TwinLine transcript — call with ${who}`,
     `${new Date(record.startedAt).toLocaleString()}${record.endedAt ? ` – ${new Date(record.endedAt).toLocaleTimeString()}` : ''}`,
-    `Model: whisper-${record.model}, language: ${record.language}`,
+    parties.length > 1 ? `Conference with: ${parties.join(', ')}` : null,
+    `Model: ${record.model}, language: ${record.language}`,
     '',
-  ];
-  const body = record.lines.map((l) => `[${stamp(l.atMs)}] ${l.speaker === 'you' ? 'You' : 'Caller'}: ${l.text}`);
+  ].filter((l) => l !== null);
+  const multi = hasMultipleParties(record);
+  const body = record.lines.map((l) => `[${stamp(l.atMs)}] ${speakerLabel(l, multi)}: ${l.text}`);
   return head.concat(body).join('\n') + '\n';
 }
 
-module.exports = { TranscriptionService, formatTranscript, FRAME_SAMPLES };
+module.exports = { TranscriptionService, formatTranscript, speakerLabel, hasMultipleParties, FRAME_SAMPLES };

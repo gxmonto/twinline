@@ -81,16 +81,21 @@ class RtpSession extends EventEmitter {
     frameSamples = 160,
     portRange = [16384, 32766],
     symmetric = true,
+    strictSource = true,
   } = {}) {
     super();
     this.localAddress = localAddress;
     this.frameSamples = frameSamples;
     this.portRange = portRange;
     this.symmetric = symmetric;
+    // Only accept media from the address the peer signalled in SDP. Ports may
+    // differ (NAT), addresses should not; anything else is injection.
+    this.strictSource = strictSource;
 
     this.socket = null;
     this.localPort = null;
-    this.remote = null;              // { address, port }
+    this.remote = null;              // { address, port } we send to
+    this.expected = null;            // { address, port } from SDP
     this.latched = false;
 
     this.ssrc = crypto.randomBytes(4).readUInt32BE(0);
@@ -144,6 +149,7 @@ class RtpSession extends EventEmitter {
     if (remoteAddress && remotePort && !isUnspecified(remoteAddress)) {
       const changed = !this.remote || this.remote.address !== remoteAddress || this.remote.port !== remotePort;
       this.remote = { address: remoteAddress, port: remotePort };
+      this.expected = { address: remoteAddress, port: remotePort };
       if (changed) this.latched = false;
     }
     if (sendCodec) {
@@ -180,6 +186,8 @@ class RtpSession extends EventEmitter {
     const packet = parsePacket(buf);
     if (!packet) return;
 
+    if (!this._acceptSource(rinfo)) return;
+
     // Symmetric RTP: media often arrives from a different port than the one
     // signalled, especially behind NAT. Latch onto the real source.
     if (this.symmetric && !this.latched) {
@@ -214,6 +222,40 @@ class RtpSession extends EventEmitter {
         this.jitter.push((packet.sequence + n) & 0xffff, frame);
       }
     }
+  }
+
+  /**
+   * Is this packet from where the media should come from? Anyone who learns
+   * our RTP port could otherwise inject audio into the call or hijack the
+   * latch so we send our audio to them.
+   */
+  _acceptSource(rinfo) {
+    if (this.strictSource && this.expected && !isUnspecified(this.expected.address)
+        && rinfo.address !== this.expected.address) {
+      return this._rejectSource(rinfo);
+    }
+    if (this.latched && this.remote && rinfo.address !== this.remote.address) {
+      // Already talking to someone; a new address mid-call is not a NAT port
+      // shuffle, it is somebody else.
+      return this._rejectSource(rinfo);
+    }
+    if (this.latched && this.remote && rinfo.port !== this.remote.port) {
+      // Same host, new port: legitimate (NAT rebinding). Follow it.
+      this.remote = { address: rinfo.address, port: rinfo.port };
+    }
+    return true;
+  }
+
+  _rejectSource(rinfo) {
+    this.stats.unexpectedSource = (this.stats.unexpectedSource || 0) + 1;
+    const key = `${rinfo.address}:${rinfo.port}`;
+    this._rejected ??= new Map();
+    const last = this._rejected.get(key) || 0;
+    if (Date.now() - last > 30000) {
+      this._rejected.set(key, Date.now());
+      this.emit('unexpectedSource', { address: rinfo.address, port: rinfo.port });
+    }
+    return false;
   }
 
   _onInboundDtmf(packet) {

@@ -186,8 +186,15 @@ function stripEmpty(obj) {
 // ---- CSV ---------------------------------------------------------------------
 
 function csvCell(value) {
-  const s = String(value ?? '');
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(value ?? '');
+  // Spreadsheets execute a cell that starts with = @ + or - as a formula when
+  // the file is opened (including DDE payloads like "-2+3+cmd|..."); a leading
+  // apostrophe defuses it. A cell starting with + or - is left alone only when
+  // the whole thing is a number or phone number, so "+44 20 7946 0958" and
+  // "-1234" survive untouched.
+  const formulaStart = /^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !/^[+-][\d\s().+-]*$/.test(s));
+  if (formulaStart) s = `'${s}`;
+  return /[",\r\n']/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 /** RFC 4180 parser that also tolerates semicolon-separated exports. */
