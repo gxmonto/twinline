@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-09-23
+
+Small fixes: the transcript countdown now shows in the panel header ("Closing in 5 s", with Keep open next to it); minimise, maximise and close are drawn by Windows itself so they always respond; the incoming-call popup drags smoothly from its top bar with no dead spots and has a ✕ to hide it while the call keeps ringing in the main window; the Settings version line says "Windows 64-bit" instead of win32.
+
 ## 1.4.0 — 2026-09-23
 
 Conference transcription now hears everyone: every participant is recognised and labelled by contact name or number, not just the first two.
