@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.2 — 2026-09-23
+
+- When the other side pulls you into a conference, TwinLine now says so: a "Conference (their side)" tag appears on the call when the PBX identifies itself as a conference bridge or renames the call ("Conference 8000"). TwinLine cannot list who is in a conference hosted elsewhere — the PBX does not tell a phone — but the transcript now tries to tell voices apart: when it is confident several people are speaking through one line, lines are labelled Caller 1, Caller 2, … by voice. Treat those labels as approximate; phone audio makes voices hard to separate. A small voice model (29 MB) is fetched automatically.
+- Redirect a ringing call without answering: the ↪ button on an incoming call sends it to another number.
+- Dialogs no longer run under the window's corner buttons.
+
 ## 1.4.1 — 2026-09-23
 
 Small fixes: the transcript countdown now shows in the panel header ("Closing in 5 s", with Keep open next to it); minimise, maximise and close are drawn by Windows itself so they always respond; the incoming-call popup drags smoothly from its top bar with no dead spots and has a ✕ to hide it while the call keeps ringing in the main window; the Settings version line says "Windows 64-bit" instead of win32.
