@@ -90,19 +90,23 @@ async function main() {
 
   const t0 = Date.now();
   const lines = [];
+  const { VoiceClusterer } = require(path.join(root, 'src', 'main', 'transcribe', 'voices'));
+  const voices = new VoiceClusterer();
+  const speaker = store.installed('speaker') ? store.paths('speaker').speaker : null;
   const transcriber = new Transcriber({
-    sherpa, model, vadModel: vad.vad,
+    sherpa, model, vadModel: vad.vad, speakerModel: speaker,
     language: arg('lang', 'auto'),
     threads: Math.max(2, Math.min(8, os.cpus().length - 2)),
     onSegment: (seg) => {
       const stamp = `${String(Math.floor(seg.startMs / 60000)).padStart(2, '0')}:${String(Math.floor((seg.startMs % 60000) / 1000)).padStart(2, '0')}`;
-      const line = seg.error ? `[${stamp}] (error: ${seg.error})` : `[${stamp}] ${seg.lang ? `(${seg.lang}) ` : ''}${seg.text}`;
+      const who = seg.embedding ? ` [voice ${voices.assign(seg.embedding, seg.endMs - seg.startMs).voice}]` : '';
+      const line = seg.error ? `[${stamp}] (error: ${seg.error})` : `[${stamp}]${who} ${seg.lang ? `(${seg.lang}) ` : ''}${seg.text}`;
       lines.push(line);
       console.log(line + (seg.decodeMs ? `   ~${seg.decodeMs} ms` : ''));
     },
   });
   await transcriber.init();
-  console.log(`engine sherpa-onnx ${sherpa.version}, model ${modelId}, input ${rate} Hz, loaded in ${Date.now() - t0} ms\n`);
+  console.log(`engine sherpa-onnx ${sherpa.version}, model ${modelId}, voices ${speaker ? 'on' : 'off (no speaker model)'}, input ${rate} Hz, loaded in ${Date.now() - t0} ms\n`);
 
   transcriber.openChannel('file', { inputRate: rate, label: 'file' });
   // Feed in 20 ms frames exactly as calls arrive.
@@ -114,7 +118,7 @@ async function main() {
   }
   transcriber.closeChannel('file');
   await transcriber.idle();
-  console.log(`\n${lines.length} line(s); ${transcriber.stats.dropped} segment(s) dropped; total decode ${transcriber.stats.decodeMs} ms`);
+  console.log(`\n${lines.length} line(s); ${transcriber.stats.dropped} segment(s) dropped; total decode ${transcriber.stats.decodeMs} ms${speaker ? `; ${voices.count} distinct voice(s)` : ''}`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

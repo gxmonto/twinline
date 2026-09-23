@@ -239,6 +239,46 @@ test('declining an incoming call reports busy to the caller', async (t) => {
   assert.strictEqual(outgoing.endReason, 'busy');
 });
 
+test('a ringing call can be redirected elsewhere with 302 without answering', async (t) => {
+  const env = await makePair(72);
+  t.after(() => env.teardown());
+
+  const before = env.incoming.length;
+  const outgoing = await env.alice.dial('bob');
+  const inbound = await waitFor(
+    () => env.incoming.slice(before).find((c) => c !== outgoing && c.state === 'incoming'),
+    { label: 'incoming call' });
+
+  inbound.deflect('9001');
+  assert.strictEqual(inbound.state, 'terminated');
+  assert.strictEqual(inbound.endReason, 'redirected');
+  await waitFor(() => outgoing.state === 'terminated', { label: 'caller sees the 302' });
+  assert.strictEqual(outgoing.endStatus, 302, 'the caller received Moved Temporarily');
+  // Only a ringing incoming call can be redirected.
+  assert.throws(() => outgoing.deflect('9001'), /ringing incoming/);
+});
+
+test('a conference focus (;isfocus) and a "Conference" identity are recognised', async (t) => {
+  const env = await makePair(76);
+  t.after(() => env.teardown());
+  const P = require('../src/main/sip/parser');
+
+  const { outgoing, inbound } = await connectedPair(env);
+  assert.strictEqual(outgoing.hostedConference, false);
+
+  // A re-INVITE from the peer whose Contact says it is a conference focus.
+  const reinvite = P.parse([
+    'INVITE sip:x SIP/2.0', 'Via: SIP/2.0/UDP h;branch=z9hG4bKf', `Call-ID: ${outgoing.callId}`,
+    'CSeq: 99 INVITE', 'From: "Conference 8000" <sip:bob@127.0.0.1>;tag=x', 'To: <sip:alice@127.0.0.1>;tag=y',
+    'Contact: <sip:conf@127.0.0.1>;isfocus', 'Content-Length: 0', '', '',
+  ].join('\r\n'));
+  outgoing._absorbDialogState(reinvite, false);
+  assert.strictEqual(outgoing.hostedConference, true);
+  assert.strictEqual(outgoing.remoteDisplayName, 'Conference 8000');
+  assert.strictEqual(outgoing.toJSON().hostedConference, true);
+  assert.strictEqual(inbound.hostedConference, false, 'the other leg is unaffected');
+});
+
 test('the callee hanging up first also tears down cleanly', async (t) => {
   const env = await makePair(28);
   t.after(() => env.teardown());

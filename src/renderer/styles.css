@@ -327,6 +327,11 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 .transcript-lines .s { flex: 0 0 auto; min-width: 48px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .transcript-lines .s.you { color: var(--accent); }
 .transcript-lines .s.caller { color: var(--green); }
+.transcript-lines .s.caller.v2 { color: var(--amber); }
+.transcript-lines .s.caller.v3 { color: #b98cf0; }
+.transcript-lines .s.caller.v4 { color: #4cc9f0; }
+.pill.voices { background: rgba(224, 163, 62, 0.22); color: var(--amber); }
+.btn.icon-only { width: 30px; padding: 6px 0; text-align: center; font-size: 14px; line-height: 1; }
 .transcript-lines .x { flex: 1 1 auto; }
 .transcript-lines .x small { color: var(--text-dim); margin-left: 5px; }
 .transcript-lines .empty-line { color: var(--text-dim); font-style: italic; }
@@ -424,7 +429,9 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 
 .overlay {
   position: fixed;
-  inset: 0;
+  /* Start below the title bar so the OS caption buttons never sit on top of
+     a dialog's own header. */
+  inset: 42px 0 0 0;
   background: rgba(8, 10, 14, 0.72);
   display: grid;
   place-items: center;

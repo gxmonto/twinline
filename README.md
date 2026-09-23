@@ -45,6 +45,12 @@ override** if your provider does not echo `rport`.
   on *Resume*) and *Drop* hangs up on that party only. *Split* keeps everyone
   on the line but stops bridging; *End all* hangs up on everyone.
 - **Transfer**: blind to a number, or attended to another call in progress.
+  A *ringing* call can be redirected elsewhere without answering (the ↪
+  button).
+- **Conferences hosted by the other side**: when a PBX pulls you into its own
+  bridge, the call shows *Conference (their side)* if the PBX announces it.
+  TwinLine cannot list who is in it — the PBX does not tell a phone — but the
+  transcript tells the voices apart (*Caller 1*, *Caller 2*, …).
 - **Hold music** is whatever your PBX or provider plays; TwinLine itself sends
   silence to a held party.
 - **Pop out**: the ⧉ button on Settings, Contacts, History, a transcript or

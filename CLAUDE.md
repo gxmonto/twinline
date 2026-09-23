@@ -45,12 +45,16 @@ Rules:
   install-on-quit guard existed (`updater.disableInstallOnQuit()` in
   `runUpdateCheck`). Keep the guard. Never build a throwaway higher version
   and point a real installed copy at it.
-- Bump the minor for features, patch for fixes. History: 1.0.0 first build →
+- Versioning (Mike's rule, 2026-09-23): the third number for everything —
+  fixes, small features, visual tweaks — and the second number only for a big
+  change. Versions are three numbers (semver, the updater orders them); the
+  fourth digit Windows shows is padding and cannot be used. History: 1.0.0 first build →
   1.0.1 legacy-hold fix → 1.0.2 tray icon → 1.0.3 network re-registration +
   logging → 1.0.4 in-app updates → 1.1.0 transcription (Whisper) → 1.2.0
   Parakeet engine, frameless window → 1.2.1 artefact names → 1.3.0 pop-out panels →
   1.4.0 security review, Electron 44, conference-wide transcription, call-waiting
-  tone, transcript auto-close.
+  tone, transcript auto-close → 1.4.1 native caption buttons, popup manual drag →
+  1.4.2 hosted-conference detection, voice separation, 302 redirect.
 
 ## Architecture in one breath
 
@@ -97,6 +101,23 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   labelled by contact/name/number), so *You*/*Caller*/per-party labels need
   no diarisation. One conference = one transcript (`mergeConference` keeps the
   earliest). A finished transcript auto-closes after 5 s unless "Keep open".
+- **Hosted conferences** (the PBX bridges, we have one leg): detected from
+  `;isfocus` on the remote Contact (RFC 4579) or an identity change to
+  "Conference…" (P-Asserted-Identity / Remote-Party-ID / From on a re-INVITE)
+  → `call.hostedConference`. Participants cannot be listed — the PBX does not
+  tell a phone — so voices are told apart instead: `core.js` computes a
+  speaker embedding (wespeaker CAM++, `models/speaker`) per remote utterance,
+  `voices.js` clusters online (cosine ≥ 0.6 joins; ≥ 1.2 s needed to found a
+  new voice), lines get `voice` and labels "Caller 1/2". Imperfect by nature;
+  say so. The mic channel is never clustered.
+- **Redirect while ringing**: `Call.deflect(target)` answers the INVITE with
+  302 + Contact; the PBX places the call. UI: ↪ icon on incoming cards opens
+  the Transfer dialog in "Redirect" mode.
+- **Window Controls Overlay** (1.4.1): `TITLE_BAR` in main.js; the page hides
+  its own min/max/close when `appInfo.windowControls === 'native'`; overlays
+  start at 42 px so OS buttons never cover a dialog header. The incoming popup
+  is the exception: frameless, dragged by mouse deltas (`popup:move`), ✕
+  dismisses (`popup:dismiss`) while the main window keeps ringing.
 - **Call waiting**: an incoming call during a live call plays a soft beep
   (`waiting` pattern), not the ringtone; tones share the call's AudioContext
   when the ringtone device is the speaker device, so Windows communications

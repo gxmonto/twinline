@@ -81,6 +81,18 @@ const VAD = {
   ],
 };
 
+// Voice fingerprints, used to tell people apart when several speak through
+// one call (a conference hosted by the other side). Fetched with any model.
+const SPEAKER = {
+  id: 'speaker',
+  dir: 'speaker',
+  label: 'Speaker embedding model (tells voices apart)',
+  approxMB: 29,
+  files: [
+    { name: 'wespeaker_en_voxceleb_CAM++.onnx', url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_CAM++.onnx', role: 'speaker', size: 29292684, sha256: 'c46fad10b5f81e1aa4a60c162714208577093655076c5450f8c469e522ec54ef' },
+  ],
+};
+
 class ModelStore extends EventEmitter {
   constructor(rootDir) {
     super();
@@ -96,6 +108,7 @@ class ModelStore extends EventEmitter {
 
   static entry(id) {
     if (id === 'vad') return VAD;
+    if (id === 'speaker') return SPEAKER;
     const m = CATALOG[id];
     if (!m) throw new Error(`unknown model "${id}"`);
     return m;
@@ -134,6 +147,7 @@ class ModelStore extends EventEmitter {
       root: this.root,
       vadInstalled: this.installed('vad'),
       vadDownloading: this.active.has('vad'),
+      speakerInstalled: this.installed('speaker'),
       models,
     };
   }
@@ -186,8 +200,12 @@ class ModelStore extends EventEmitter {
       this.active.delete(id);
       this.emit('progress', { id, done: true });
     }
-    // The VAD is tiny and every model needs it.
-    if (id !== 'vad' && !this.installed('vad')) await this.download('vad');
+    // The VAD is tiny and every model needs it; the speaker model is small
+    // and what makes "Caller 1 / Caller 2" possible.
+    if (id !== 'vad' && id !== 'speaker') {
+      if (!this.installed('vad')) await this.download('vad');
+      if (!this.installed('speaker')) await this.download('speaker').catch((err) => log.warn('speaker model download failed', err));
+    }
     return this.status();
   }
 
@@ -282,4 +300,4 @@ function abortError() {
   return err;
 }
 
-module.exports = { ModelStore, CATALOG, VAD, verifyFile };
+module.exports = { ModelStore, CATALOG, VAD, SPEAKER, verifyFile };
