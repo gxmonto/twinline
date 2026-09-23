@@ -219,6 +219,8 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   future enhancement); no ICE/STUN. Known and accepted.
 - The 1.4.2 security audit lives in `SECURITY-AUDIT-1.4.2.md` (findings
   H1–L6); everything except M2 (certificate) and L5 (SRTP) was fixed in 1.4.3.
+  `SECURITY-AUDIT-1.4.3-verification.md` re-checks each finding. CI's
+  build-check boots the built AppImage (`--smoke`) since then.
 
 ## Mike's preferences (learned)
 
