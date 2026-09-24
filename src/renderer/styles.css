@@ -71,6 +71,9 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
   display: flex;
   gap: 6px;
   margin-left: auto;
+  min-width: 0;             /* may shrink: the buttons after it must always fit */
+  flex: 0 1 auto;
+  overflow: hidden;
   -webkit-app-region: no-drag;
 }
 
@@ -86,6 +89,9 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
   color: var(--text-dim);
   white-space: nowrap;
   max-width: 130px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
 }
 
 .line-chip .dot {
@@ -103,7 +109,11 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 
 @keyframes pulse { 50% { opacity: 0.3; } }
 
-.titlebar-actions { display: flex; gap: 2px; -webkit-app-region: no-drag; }
+.titlebar-actions { display: flex; gap: 2px; flex: 0 0 auto; -webkit-app-region: no-drag; }
+.brand { flex: 0 0 auto; }
+/* Narrow window: on Windows the OS caption buttons take the right ~140 px of
+   the bar, so the product name gives way before the line chips and buttons do. */
+@media (max-width: 400px) { .brand .name { display: none; } }
 
 .icon-btn {
   width: 26px; height: 26px;
@@ -439,7 +449,10 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
   z-index: 50;
 }
 
-.overlay.hidden, .hidden { display: none; }
+.overlay.hidden, .hidden { display: none !important; }
+/* !important on purpose: element rules that set their own display (.contact-form
+   is display:grid and is written later in this file) used to outrank .hidden by
+   source order, so the "Add contact" form showed all the time. */
 
 .sheet {
   width: 100%;
