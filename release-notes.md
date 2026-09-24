@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Linux: after switching from the AppImage to the .deb or .rpm, the menu could still open the deleted AppImage. The installed app now removes the launcher the AppImage left behind and points `sip:`/`tel:` links at itself.
