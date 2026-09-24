@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.8 — 2026-09-24
+
+- Windows portable: the portable exe cannot replace itself, and until now an update would silently install the full app while you kept launching the old portable file. It now offers the new portable file to download and explains what to do.
+
 ## 1.4.7 — 2026-09-24
 
 - Linux: when installed from the .rpm or .deb, the update button now downloads the matching package (and says how to install it) instead of the AppImage. An AppImage still updates itself.
