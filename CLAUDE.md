@@ -119,7 +119,18 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   its own min/max/close when `appInfo.windowControls === 'native'`; overlays
   start at 42 px so OS buttons never cover a dialog header. The incoming popup
   is the exception: frameless, dragged by mouse deltas (`popup:move`), ✕
-  dismisses (`popup:dismiss`) while the main window keeps ringing.
+  dismisses (`popup:dismiss`) while the main window keeps ringing. The bar's
+  content must never overflow `env(titlebar-area-width)`: `.lines`/chips
+  shrink (`min-width: 0`), actions are `flex: 0 0 auto`, and the smoke test
+  checks `btnSettings` fits at `minWidth` 380 (1.4.5; it did not before).
+- **Popup placement** (1.4.5): first appearance is centred over the main
+  window; every position, saved or default, goes through `clampToDisplay`
+  so the grip is always reachable. `popupPosition` is still remembered.
+- **`.hidden` is `!important`**: element rules written later in styles.css
+  (e.g. `.contact-form { display: grid }`) silently beat it by source order —
+  that is why the contact form showed all the time until 1.4.5.
+- **Call history** persists in `<userData>/history.json` (CallManager
+  `historyFile`, atomic write on every change, last 300 calls).
 - **Call waiting**: an incoming call during a live call plays a soft beep
   (`waiting` pattern), not the ringtone; tones share the call's AudioContext
   when the ringtone device is the speaker device, so Windows communications

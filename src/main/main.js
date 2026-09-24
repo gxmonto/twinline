@@ -223,6 +223,21 @@ async function runSmokeTest() {
     for (const [name, result] of Object.entries(report.hits)) {
       if (result !== 'ok') problems.push(`${name} is covered by ${result}`);
     }
+    // At the smallest allowed width the title-bar buttons must still sit
+    // inside the bar — anything pushed past its right edge is under the OS
+    // caption buttons on Windows and cannot be clicked (Mike's report).
+    const [w0, h0] = mainWindow.getSize();
+    mainWindow.setSize(380, 560, false);
+    await new Promise((r) => setTimeout(r, 400));
+    report.narrow = await mainWindow.webContents.executeJavaScript(`(() => {
+      const bar = document.querySelector('.titlebar').getBoundingClientRect();
+      const btn = document.getElementById('btnSettings').getBoundingClientRect();
+      return { width: window.innerWidth, barRight: Math.round(bar.right), settingsRight: Math.round(btn.right), visible: btn.width > 0 };
+    })()`);
+    mainWindow.setSize(w0, h0, false);
+    if (!report.narrow.visible || report.narrow.settingsRight > report.narrow.barRight) {
+      problems.push(`settings button does not fit the title bar at minimum width: ${JSON.stringify(report.narrow)}`);
+    }
     panel.close();
     if (!report.panel.panelMode || !report.panel.settingsShown || !report.panel.dialerHidden) {
       problems.push(`popped-out settings panel did not render as a panel: ${JSON.stringify(report.panel)}`);
@@ -262,27 +277,39 @@ async function runSmokeTest() {
 const POPUP_WIDTH = 380;
 const POPUP_CALL_HEIGHT = 118;
 
-/** Is a saved top-left point still on some connected display? */
-function positionOnScreen(pos) {
-  if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return false;
-  return screen.getAllDisplays().some(({ workArea }) =>
-    pos.x >= workArea.x - POPUP_WIDTH + 60 &&
-    pos.x <= workArea.x + workArea.width - 60 &&
-    pos.y >= workArea.y - 20 &&
-    pos.y <= workArea.y + workArea.height - 60);
+/** Keep a popup rectangle fully inside the work area of the display it is on. */
+function clampToDisplay(pos, height) {
+  const { workArea } = screen.getDisplayNearestPoint({ x: Math.round(pos.x + POPUP_WIDTH / 2), y: Math.round(pos.y + 20) });
+  return {
+    x: Math.round(Math.min(Math.max(pos.x, workArea.x), workArea.x + workArea.width - POPUP_WIDTH)),
+    y: Math.round(Math.min(Math.max(pos.y, workArea.y), workArea.y + workArea.height - height)),
+  };
 }
 
+/**
+ * Where the popup goes when the user has never moved it: centred over the
+ * main window, so it is seen where the person is looking and can be dragged
+ * from there. (It used to go to the bottom-right of the primary display; with
+ * the main window docked at a screen edge that left the popup half off-screen
+ * with its grip unreachable — "stuck".) Falls back to the bottom-right corner
+ * when there is no visible main window.
+ */
 function defaultPopupPosition(height) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) {
+    const b = mainWindow.getBounds();
+    return clampToDisplay({ x: b.x + (b.width - POPUP_WIDTH) / 2, y: b.y + (b.height - height) / 2 }, height);
+  }
   const { workArea } = screen.getPrimaryDisplay();
-  return {
-    x: Math.round(workArea.x + workArea.width - POPUP_WIDTH - 24),
-    y: Math.round(workArea.y + workArea.height - height - 24),
-  };
+  return clampToDisplay({ x: workArea.x + workArea.width - POPUP_WIDTH - 24, y: workArea.y + workArea.height - height - 24 }, height);
 }
 
 function createPopup(height) {
   const saved = settings.data.behaviour.popupPosition;
-  const pos = positionOnScreen(saved) ? saved : defaultPopupPosition(height);
+  // A remembered spot is honoured, but pulled fully onto whatever display is
+  // nearest — monitors get unplugged and resolutions change.
+  const pos = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
+    ? clampToDisplay(saved, height)
+    : defaultPopupPosition(height);
 
   popupWindow = new BrowserWindow({
     width: POPUP_WIDTH,
@@ -360,7 +387,13 @@ function updatePopup() {
     createPopup(height);
   } else {
     const [w, h] = popupWindow.getSize();
-    if (h !== height) popupWindow.setSize(w, height, false);
+    if (h !== height) {
+      popupWindow.setSize(w, height, false);
+      // Growing for a second caller must not push the bottom off the screen.
+      const [x, y] = popupWindow.getPosition();
+      const pos = clampToDisplay({ x, y }, height);
+      if (pos.x !== x || pos.y !== y) popupWindow.setPosition(pos.x, pos.y, false);
+    }
     pushPopupCalls();
   }
   // showInactive keeps the user's keyboard focus where it was.
@@ -620,6 +653,7 @@ async function bootstrap() {
     contacts,
     transcription,
     maxCalls: settings.data.behaviour.maxCalls,
+    historyFile: path.join(app.getPath('userData'), 'history.json'),
   });
 
   manager.on('calls', (snapshot) => { send('state', snapshot); updatePowerBlocker(); updatePopup(); });

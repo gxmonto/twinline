@@ -20,13 +20,16 @@
 const { EventEmitter } = require('events');
 const { UserAgent } = require('./sip/useragent');
 const log = require('./log').child('calls');
+const fs = require('fs');
+const path = require('path');
 
 const MAX_HISTORY = 300;
 
 class CallManager extends EventEmitter {
-  constructor({ audio, maxCalls = 4, contacts = null, transcription = null }) {
+  constructor({ audio, maxCalls = 4, contacts = null, transcription = null, historyFile = null }) {
     super();
     this.audio = audio;
+    this.historyFile = historyFile;           // call history persists here across restarts
     this.maxCalls = maxCalls;
     this.contacts = contacts;                 // optional ContactStore for name lookup
     this.transcription = transcription;       // optional TranscriptionService
@@ -41,7 +44,7 @@ class CallManager extends EventEmitter {
       transcription.on('finished', (t) => {
         // Attach the saved transcript to the matching history entry.
         const entry = this.history.find((h) => h.id === t.callId);
-        if (entry) { entry.transcript = t.file; entry.transcriptLines = t.lines.length; this.emit('history', this.history.slice(0, 50)); }
+        if (entry) { entry.transcript = t.file; entry.transcriptLines = t.lines.length; this._historyChanged(); }
         this._emitCalls();
       });
       transcription.on('started', () => this._emitCalls());
@@ -52,7 +55,7 @@ class CallManager extends EventEmitter {
     this.calls = new Map();
     /** @type {Set<string>} */
     this.conferenceIds = new Set();
-    this.history = [];
+    this.history = this._loadHistory();
     this.muted = false;
 
     this.audio.on('dtmf', (callId, digit) => this.emit('dtmf', { callId, digit }));
@@ -196,7 +199,36 @@ class CallManager extends EventEmitter {
       status: info.status,
     });
     if (this.history.length > MAX_HISTORY) this.history.length = MAX_HISTORY;
+    this._historyChanged();
+  }
+
+  _historyChanged() {
     this.emit('history', this.history.slice(0, 50));
+    this._saveHistory();
+  }
+
+  /** Read the saved history; an unreadable or malformed file just means none. */
+  _loadHistory() {
+    if (!this.historyFile) return [];
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.historyFile, 'utf8'));
+      return Array.isArray(parsed) ? parsed.filter((h) => h && typeof h === 'object' && typeof h.id === 'string').slice(0, MAX_HISTORY) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Write the history atomically; the file is small, so it is written whole. */
+  _saveHistory() {
+    if (!this.historyFile) return;
+    try {
+      fs.mkdirSync(path.dirname(this.historyFile), { recursive: true });
+      const tmp = `${this.historyFile}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(this.history), { mode: 0o600 });
+      fs.renameSync(tmp, this.historyFile);
+    } catch (err) {
+      log.warn('could not save call history', err);
+    }
   }
 
   _contactName(number) {
