@@ -1,1 +1,1 @@
-- Windows portable: the portable exe cannot replace itself, and until now an update would silently install the full app while you kept launching the old portable file. It now offers the new portable file to download and explains what to do.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
