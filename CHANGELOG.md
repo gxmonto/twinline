@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.7 — 2026-09-24
+
+- Linux: when installed from the .rpm or .deb, the update button now downloads the matching package (and says how to install it) instead of the AppImage. An AppImage still updates itself.
+
 ## 1.4.6 — 2026-09-24
 
 - The incoming-call popup now always opens over the TwinLine window when the window is on screen, regardless of where it was last dragged. The remembered position is only used while TwinLine is minimised or in the tray.
