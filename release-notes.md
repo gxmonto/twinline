@@ -1,1 +1,1 @@
-- Linux: when installed from the .rpm or .deb, the update button now downloads the matching package (and says how to install it) instead of the AppImage. An AppImage still updates itself.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
