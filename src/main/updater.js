@@ -157,13 +157,28 @@ function linuxDownloadUrl(feed, version, kind, arch = process.arch) {
   return file ? `${feed.url}/${file}` : `${feed.url}/`;
 }
 
-/** Where the Linux manifest lives for a given feed. */
-function linuxManifestUrl(feed) {
+/** Where the manifest for a platform lives for a given feed. */
+function manifestUrl(feed, name) {
   if (!feed) return null;
   if (feed.provider === 'github') {
-    return `https://github.com/${feed.owner}/${feed.repo}/releases/latest/download/latest-linux.yml`;
+    return `https://github.com/${feed.owner}/${feed.repo}/releases/latest/download/${name}`;
   }
-  return `${feed.url}/latest-linux.yml`;
+  return `${feed.url}/${name}`;
+}
+const linuxManifestUrl = (feed) => manifestUrl(feed, 'latest-linux.yml');
+
+/**
+ * The Windows portable exe cannot be updated in place either: electron-updater
+ * would download the *installer* and run it on quit, leaving the old portable
+ * file exactly where it was — so the person keeps launching the old version
+ * and thinks nothing changed. Point them at the new portable file instead.
+ */
+const isWindowsPortable = () => process.platform === 'win32' && !!process.env.PORTABLE_EXECUTABLE_FILE;
+function portableDownloadUrl(feed, version) {
+  const file = `TwinLine-Portable-${version}.exe`;
+  return feed.provider === 'github'
+    ? `https://github.com/${feed.owner}/${feed.repo}/releases/download/v${version}/${file}`
+    : `${feed.url}/${file}`;
 }
 
 class Updater extends EventEmitter {
@@ -193,6 +208,7 @@ class Updater extends EventEmitter {
     this._supported = app.isPackaged;
     // .deb/.rpm cannot be swapped from inside; AppImage can.
     this._linuxManualOnly = process.platform === 'linux' && !process.env.APPIMAGE;
+    this._manualOnly = this._linuxManualOnly || isWindowsPortable();
   }
 
   configure(updateSettings) {
@@ -219,7 +235,7 @@ class Updater extends EventEmitter {
   /** Wire electron-updater lazily; it throws when not packaged. */
   _autoUpdater() {
     if (this._auto) return this._auto;
-    if (!this._supported || this._linuxManualOnly) return null;
+    if (!this._supported || this._manualOnly) return null;
     const { autoUpdater } = require('electron-updater');
     autoUpdater.logger = {
       info: (m) => log.info(String(m)), warn: (m) => log.warn(String(m)),
@@ -279,7 +295,7 @@ class Updater extends EventEmitter {
     this._set({ state: 'checking', error: null, lastCheck: Date.now() });
 
     try {
-      if (this._linuxManualOnly) {
+      if (this._manualOnly) {
         await this._checkManual();
       } else {
         const auto = this._autoUpdater();
@@ -294,16 +310,24 @@ class Updater extends EventEmitter {
     return this.status;
   }
 
-  /** deb/rpm: read the Linux manifest ourselves and offer a download link. */
+  /** deb/rpm and the Windows portable exe: read the manifest ourselves and offer a download link. */
   async _checkManual() {
     const feed = this.feed || this._feedFromAppUpdateYml();
-    const url = linuxManifestUrl(feed);
+    const portable = isWindowsPortable();
+    const url = manifestUrl(feed, portable ? 'latest.yml' : 'latest-linux.yml');
     if (!url) throw new Error('No update server configured.');
     const manifest = parseLatestYml(await fetchText(url));
     if (!manifest.version) throw new Error('Update manifest is missing a version.');
 
     if (compareVersions(manifest.version, app.getVersion()) <= 0) {
       this._set({ state: 'up-to-date', version: manifest.version });
+      return;
+    }
+    if (portable) {
+      this._set({
+        state: 'available', version: manifest.version, notes: manifest.releaseNotes || null,
+        manualDownloadUrl: portableDownloadUrl(feed, manifest.version), packageKind: 'portable',
+      });
       return;
     }
     this._packageKind ??= linuxPackageKind();
@@ -399,4 +423,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl };
+module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, manifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl };

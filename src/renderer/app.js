@@ -1205,9 +1205,11 @@ function renderUpdate(status) {
   let cls = '';
   // deb/rpm cannot update themselves: the button fetches the package for the
   // system's package manager (or opens the release page if we cannot tell).
-  const manualLabel = status.packageKind ? `Download .${status.packageKind}` : 'Download page';
+  const manualLabel = status.packageKind === 'portable' ? 'Download new portable'
+    : status.packageKind ? `Download .${status.packageKind}` : 'Download page';
   const manualHint = status.packageKind === 'rpm' ? ' Install it with: sudo dnf install ./<file>.rpm'
     : status.packageKind === 'deb' ? ' Install it with: sudo apt install ./<file>.deb'
+    : status.packageKind === 'portable' ? ' The portable build cannot update itself: close TwinLine, replace your TwinLine-Portable exe with the new file, and start that one (or switch to the installer, which updates on its own).'
     : status.manualDownloadUrl ? ' Pick your package on the release page.' : '';
 
   switch (status.state) {
