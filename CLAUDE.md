@@ -213,8 +213,13 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `WIN_CSC_KEY_PASSWORD` secrets; Mike may buy an Authenticode certificate later.
   Until then every release carries `SHA256SUMS.txt` (built in the publish job).
   Linux GPG signing is not set up.
-- Linux packages are built and inspected (deb/rpm metadata, desktop entry with
-  sip:/tel: handlers) but have never been run by a user.
+- Linux packages: Mike runs the .rpm on Fedora (2026-09-24). Switching from
+  the AppImage left a stale per-user launcher (`~/.local/share/applications/
+  appimagekit_*-TwinLine.desktop`) that the menu preferred over the rpm's
+  `/usr/share/applications/twinline.desktop`; `linuxdesktop.js` sweeps such
+  launchers (ours by name, Exec target missing) at package start-up and
+  repoints `mimeapps.list` handlers to `twinline.desktop`. Never runs from the
+  AppImage (`APPIMAGE` env) or a dev checkout.
 - Codecs are G.711 only; media is plain RTP (audit L5, accepted; SRTP is a
   future enhancement); no ICE/STUN. Known and accepted.
 - The 1.4.2 security audit lives in `SECURITY-AUDIT-1.4.2.md` (findings

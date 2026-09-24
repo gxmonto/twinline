@@ -17,6 +17,7 @@ const { CallManager } = require('./callmanager');
 const { Updater } = require('./updater');
 const { ModelStore } = require('./transcribe/models');
 const { TranscriptionService } = require('./transcribe/service');
+const { cleanStaleAppImageEntries } = require('./linuxdesktop');
 
 const isDev = process.argv.includes('--dev');
 // Headless self-check: boot everything, verify the UI came up, print a
@@ -565,6 +566,15 @@ async function bootstrap() {
   log.info('main', `TwinLine ${app.getVersion()} starting`, { electron: process.versions.electron, exe: process.execPath });
   process.on('uncaughtException', (err) => log.error('main', 'uncaught exception', err));
   process.on('unhandledRejection', (err) => log.error('main', 'unhandled rejection', err));
+
+  // The .deb/.rpm start-up sweeps launchers left behind by a deleted AppImage
+  // (see linuxdesktop.js). Never from the AppImage itself or a dev checkout.
+  if (process.platform === 'linux' && app.isPackaged && !process.env.APPIMAGE) {
+    try {
+      const swept = cleanStaleAppImageEntries(app.getPath('home'));
+      if (swept.removed.length) log.info('main', 'removed stale AppImage launchers', swept);
+    } catch (err) { log.warn('main', 'stale launcher sweep failed', err); }
+  }
 
   settings = new SettingsStore(app.getPath('userData'), safeStorage);
   settings.load();

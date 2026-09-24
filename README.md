@@ -18,6 +18,8 @@ Download the latest release from
 - Windows: `TwinLine-Installer-<version>.exe` (`TwinLine-Portable-<version>.exe` is for a quick
   try — the installer gets automatic updates).
 - Debian/Ubuntu: `.deb`; Fedora/RHEL: `.rpm`; anything else: `.AppImage`.
+  Moving from the AppImage to a package? Delete the AppImage first; the
+  installed app then removes the menu entry the AppImage left behind.
 
 Windows shows a SmartScreen warning on the first install because the build is
 not code-signed; choose *More info → Run anyway*. Every release includes a
