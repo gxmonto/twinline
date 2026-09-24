@@ -238,6 +238,29 @@ async function runSmokeTest() {
     if (!report.narrow.visible || report.narrow.settingsRight > report.narrow.barRight) {
       problems.push(`settings button does not fit the title bar at minimum width: ${JSON.stringify(report.narrow)}`);
     }
+
+    // The incoming-call popup must open over the phone window — even when the
+    // phone is docked at a screen edge and a far-away position is remembered.
+    mainWindow.showInactive();
+    await new Promise((r) => setTimeout(r, 300));
+    const { workArea } = screen.getDisplayMatching(mainWindow.getBounds());
+    mainWindow.setPosition(workArea.x + workArea.width - w0, workArea.y + 40, false);
+    settings.data.behaviour.popupPosition = { x: workArea.x + 4, y: workArea.y + 4 };
+    createPopup(44 + POPUP_CALL_HEIGHT);
+    await new Promise((r) => setTimeout(r, 400));
+    const [px, py] = popupWindow.getPosition();
+    const [pw, ph] = popupWindow.getSize();
+    const mb = mainWindow.getBounds();
+    const centre = { x: px + pw / 2, y: py + ph / 2 };
+    report.popup = {
+      main: mb, popup: { x: px, y: py, w: pw, h: ph },
+      overMain: centre.x >= mb.x && centre.x <= mb.x + mb.width && centre.y >= mb.y && centre.y <= mb.y + mb.height,
+      onScreen: px >= workArea.x && py >= workArea.y && px + pw <= workArea.x + workArea.width && py + ph <= workArea.y + workArea.height,
+    };
+    popupWindow.close();
+    popupWindow = null;
+    settings.data.behaviour.popupPosition = null;
+    if (!report.popup.overMain || !report.popup.onScreen) problems.push(`popup did not open over the main window: ${JSON.stringify(report.popup)}`);
     panel.close();
     if (!report.panel.panelMode || !report.panel.settingsShown || !report.panel.dialerHidden) {
       problems.push(`popped-out settings panel did not render as a panel: ${JSON.stringify(report.panel)}`);
@@ -303,11 +326,20 @@ function positionOverMainWindow(height) {
  */
 function popupPosition(height) {
   const over = positionOverMainWindow(height);
-  if (over) return over;
   const saved = settings.data.behaviour.popupPosition;
-  if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) return clampToDisplay(saved, height);
-  const { workArea } = screen.getPrimaryDisplay();
-  return clampToDisplay({ x: workArea.x + workArea.width - POPUP_WIDTH - 24, y: workArea.y + workArea.height - height - 24 }, height);
+  let pos, reason;
+  if (over) { pos = over; reason = 'over main window'; }
+  else if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) { pos = clampToDisplay(saved, height); reason = 'remembered (main window not on screen)'; }
+  else {
+    const { workArea } = screen.getPrimaryDisplay();
+    pos = clampToDisplay({ x: workArea.x + workArea.width - POPUP_WIDTH - 24, y: workArea.y + workArea.height - height - 24 }, height);
+    reason = 'default corner';
+  }
+  // Logged so a "it opened at the edge" report can be read straight off the log.
+  const main = mainWindow && !mainWindow.isDestroyed()
+    ? { bounds: mainWindow.getBounds(), visible: mainWindow.isVisible(), minimized: mainWindow.isMinimized() } : null;
+  log.info('main', 'popup placed', { reason, pos, main, saved });
+  return pos;
 }
 
 function createPopup(height) {
