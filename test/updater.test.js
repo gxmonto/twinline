@@ -11,8 +11,16 @@ Module._load = function (request, ...rest) {
   }
   return realLoad.call(this, request, ...rest);
 };
-const { compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, linuxPackageKind, linuxDownloadUrl } = require('../src/main/updater');
+const { compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, manifestUrl, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl } = require('../src/main/updater');
 Module._load = realLoad;
+
+test('the Windows portable exe is sent to the new portable file, not the installer', () => {
+  const gh = { provider: 'github', owner: 'gxmonto', repo: 'twinline' };
+  assert.strictEqual(portableDownloadUrl(gh, '1.4.8'), 'https://github.com/gxmonto/twinline/releases/download/v1.4.8/TwinLine-Portable-1.4.8.exe');
+  assert.strictEqual(portableDownloadUrl({ provider: 'generic', url: 'https://u.example/tl' }, '1.4.8'), 'https://u.example/tl/TwinLine-Portable-1.4.8.exe');
+  assert.strictEqual(manifestUrl(gh, 'latest.yml'), 'https://github.com/gxmonto/twinline/releases/latest/download/latest.yml');
+  assert.strictEqual(linuxManifestUrl(gh), 'https://github.com/gxmonto/twinline/releases/latest/download/latest-linux.yml');
+});
 
 test('deb/rpm installs are sent to their own package, never the AppImage', () => {
   const gh = { provider: 'github', owner: 'gxmonto', repo: 'twinline' };

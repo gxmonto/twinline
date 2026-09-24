@@ -189,6 +189,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   rejected even with strict off. `unexpectedSource` is logged once per 30 s.
   If a provider relays media from an address other than its SDP `c=`, users
   turn the switch off — that is the diagnosis for sudden one-way audio.
+- Windows portable (`PORTABLE_EXECUTABLE_FILE` env) is manual-only too:
+  electron-updater would run the *installer* on quit and the old portable file
+  stayed in use — the likely reason a test laptop kept pre-1.4.6 behaviour.
+  `_checkManual` reads latest.yml and links `TwinLine-Portable-<v>.exe`
+  (`packageKind: 'portable'`).
 - Linux updates: an AppImage (`APPIMAGE` env) updates itself via
   electron-updater; a .deb/.rpm cannot, so `_checkManual` reads
   latest-linux.yml and offers a link. That manifest only names the AppImage —
