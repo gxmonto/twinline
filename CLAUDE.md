@@ -189,6 +189,15 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   rejected even with strict off. `unexpectedSource` is logged once per 30 s.
   If a provider relays media from an address other than its SDP `c=`, users
   turn the switch off — that is the diagnosis for sudden one-way audio.
+- Linux updates: an AppImage (`APPIMAGE` env) updates itself via
+  electron-updater; a .deb/.rpm cannot, so `_checkManual` reads
+  latest-linux.yml and offers a link. That manifest only names the AppImage —
+  1.4.6 and earlier linked it and the browser downloaded it outright (Mike,
+  Fedora). `linuxPackageKind()` asks `rpm -q` / `dpkg-query -W` (then
+  /etc/os-release) and `linuxDownloadUrl()` names the package the release
+  workflow publishes (`twinline-<v>.x86_64.rpm` / `twinline_<v>_amd64.deb`),
+  or the release page when unsure. Keep those names in step with
+  electron-builder's artifact names.
 - Updater: a custom feed must be https unless loopback/RFC 1918
   (`feedFromUrl`); `openExternal` only for http(s). Redirects in `fetchText`
   and the model downloader go through `urlpolicy.followRedirect`, which

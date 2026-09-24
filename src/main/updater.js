@@ -117,6 +117,46 @@ function feedFromUrl(url) {
   return { provider: 'generic', url: u.replace(/\/+$/, '') };
 }
 
+/**
+ * Which Linux package manager owns this install: 'rpm', 'deb', or null (an
+ * AppImage, a dev checkout, or something we cannot tell). Asked of the
+ * package databases themselves; the distro family is only a fallback.
+ */
+function linuxPackageKind({ execFileSync = require('child_process').execFileSync, readFile = require('fs').readFileSync } = {}) {
+  if (process.platform !== 'linux' || process.env.APPIMAGE) return null;
+  const owns = (cmd, args) => {
+    try { execFileSync(cmd, args, { stdio: 'ignore', timeout: 3000 }); return true; } catch { return false; }
+  };
+  if (owns('rpm', ['-q', 'twinline'])) return 'rpm';
+  if (owns('dpkg-query', ['-W', 'twinline'])) return 'deb';
+  try {
+    const os = readFile('/etc/os-release', 'utf8');
+    const like = `${(/^ID=(.*)$/m.exec(os) || [])[1] || ''} ${(/^ID_LIKE=(.*)$/m.exec(os) || [])[1] || ''}`.toLowerCase();
+    if (/fedora|rhel|centos|suse|opensuse|mageia/.test(like)) return 'rpm';
+    if (/debian|ubuntu/.test(like)) return 'deb';
+  } catch { /* no os-release */ }
+  return null;
+}
+
+/**
+ * The file a .deb/.rpm user should be sent to for `version`. The manifest
+ * electron-builder writes (latest-linux.yml) only names the AppImage, and
+ * handing that to a browser downloads it straight away — which is exactly
+ * what a Fedora user with the rpm installed does not want. So name the
+ * package the release workflow publishes, or fall back to the release page.
+ */
+function linuxDownloadUrl(feed, version, kind, arch = process.arch) {
+  const v = String(version);
+  const file = kind === 'rpm' ? `twinline-${v}.${arch === 'arm64' ? 'aarch64' : 'x86_64'}.rpm`
+    : kind === 'deb' ? `twinline_${v}_${arch === 'arm64' ? 'arm64' : 'amd64'}.deb`
+    : null;
+  if (feed.provider === 'github') {
+    const repo = `https://github.com/${feed.owner}/${feed.repo}/releases`;
+    return file ? `${repo}/download/v${v}/${file}` : `${repo}/tag/v${v}`;
+  }
+  return file ? `${feed.url}/${file}` : `${feed.url}/`;
+}
+
 /** Where the Linux manifest lives for a given feed. */
 function linuxManifestUrl(feed) {
   if (!feed) return null;
@@ -145,6 +185,7 @@ class Updater extends EventEmitter {
       error: null,
       lastCheck: null,
       manualDownloadUrl: null,              // set when we can only point at a file
+      packageKind: null,                    // 'rpm' | 'deb' when the download is a package
       pendingInstall: false,
     };
     this._timer = null;
@@ -265,15 +306,13 @@ class Updater extends EventEmitter {
       this._set({ state: 'up-to-date', version: manifest.version });
       return;
     }
-    const file = manifest.path || (manifest.files[0] && manifest.files[0].url);
-    const base = feed.provider === 'github'
-      ? `https://github.com/${feed.owner}/${feed.repo}/releases/download/v${manifest.version}/`
-      : `${feed.url}/`;
+    this._packageKind ??= linuxPackageKind();
     this._set({
       state: 'available',
       version: manifest.version,
       notes: manifest.releaseNotes || null,
-      manualDownloadUrl: file ? new URL(file, base).toString() : base,
+      manualDownloadUrl: linuxDownloadUrl(feed, manifest.version, this._packageKind),
+      packageKind: this._packageKind,
     });
   }
 
@@ -360,4 +399,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork, fetchText };
+module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl };

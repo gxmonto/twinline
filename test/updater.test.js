@@ -11,8 +11,42 @@ Module._load = function (request, ...rest) {
   }
   return realLoad.call(this, request, ...rest);
 };
-const { compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl } = require('../src/main/updater');
+const { compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, linuxPackageKind, linuxDownloadUrl } = require('../src/main/updater');
 Module._load = realLoad;
+
+test('deb/rpm installs are sent to their own package, never the AppImage', () => {
+  const gh = { provider: 'github', owner: 'gxmonto', repo: 'twinline' };
+  assert.strictEqual(linuxDownloadUrl(gh, '1.4.7', 'rpm', 'x64'), 'https://github.com/gxmonto/twinline/releases/download/v1.4.7/twinline-1.4.7.x86_64.rpm');
+  assert.strictEqual(linuxDownloadUrl(gh, '1.4.7', 'deb', 'x64'), 'https://github.com/gxmonto/twinline/releases/download/v1.4.7/twinline_1.4.7_amd64.deb');
+  assert.strictEqual(linuxDownloadUrl(gh, '1.4.7', 'rpm', 'arm64'), 'https://github.com/gxmonto/twinline/releases/download/v1.4.7/twinline-1.4.7.aarch64.rpm');
+  assert.strictEqual(linuxDownloadUrl(gh, '1.4.7', null, 'x64'), 'https://github.com/gxmonto/twinline/releases/tag/v1.4.7', 'unknown kind: the release page, not a file');
+  const generic = { provider: 'generic', url: 'https://updates.example.com/twinline' };
+  assert.strictEqual(linuxDownloadUrl(generic, '2.0.0', 'deb', 'x64'), 'https://updates.example.com/twinline/twinline_2.0.0_amd64.deb');
+  assert.strictEqual(linuxDownloadUrl(generic, '2.0.0', null, 'x64'), 'https://updates.example.com/twinline/');
+});
+
+test('the package manager that owns the install is asked first, the distro family second', () => {
+  if (process.platform !== 'linux') {
+    assert.strictEqual(linuxPackageKind(), null, 'not Linux: never a package');
+  }
+  const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  const savedAppImage = process.env.APPIMAGE;
+  delete process.env.APPIMAGE;
+  try {
+    const exec = (answers) => (cmd) => { if (!answers[cmd]) { const e = new Error('not installed'); throw e; } };
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({ rpm: true }), readFile: () => '' }), 'rpm');
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({ 'dpkg-query': true }), readFile: () => '' }), 'deb');
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({}), readFile: () => 'ID=fedora\nID_LIKE=rhel\n' }), 'rpm');
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({}), readFile: () => 'ID=ubuntu\nID_LIKE=debian\n' }), 'deb');
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({}), readFile: () => 'ID=arch\n' }), null);
+    process.env.APPIMAGE = '/tmp/TwinLine.AppImage';
+    assert.strictEqual(linuxPackageKind({ execFileSync: exec({ rpm: true }), readFile: () => '' }), null, 'an AppImage updates itself');
+  } finally {
+    if (savedAppImage === undefined) delete process.env.APPIMAGE; else process.env.APPIMAGE = savedAppImage;
+    Object.defineProperty(process, 'platform', realPlatform);
+  }
+});
 
 test('version comparison', () => {
   assert.ok(compareVersions('1.0.4', '1.0.3') > 0);
