@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.5 — 2026-09-24
+
+- Call history is kept across restarts (it used to vanish when the app was closed).
+- The incoming-call popup first appears centred over the TwinLine window, and is always placed fully on screen, so it can no longer get stuck half off the edge.
+- Narrow window: the Contacts, History and Settings buttons no longer slide under the Windows caption buttons; the line chips shrink instead.
+- Contacts: the add/edit form is hidden until you press Add or edit a contact.
+
 ## 1.4.4 — 2026-09-24
 
 - Linux: after switching from the AppImage to the .deb or .rpm, the menu could still open the deleted AppImage. The installed app now removes the launcher the AppImage left behind and points `sip:`/`tel:` links at itself.
