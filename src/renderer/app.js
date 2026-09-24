@@ -1203,12 +1203,18 @@ function renderUpdate(status) {
     `<button class="${cls}" data-update="${action}">${label}</button>`;
   let html = null;
   let cls = '';
+  // deb/rpm cannot update themselves: the button fetches the package for the
+  // system's package manager (or opens the release page if we cannot tell).
+  const manualLabel = status.packageKind ? `Download .${status.packageKind}` : 'Download page';
+  const manualHint = status.packageKind === 'rpm' ? ' Install it with: sudo dnf install ./<file>.rpm'
+    : status.packageKind === 'deb' ? ' Install it with: sudo apt install ./<file>.deb'
+    : status.manualDownloadUrl ? ' Pick your package on the release page.' : '';
 
   switch (status.state) {
     case 'available':
-      html = `<span class="text">TwinLine <b>${v}</b> is available (you have ${current}).</span>`
+      html = `<span class="text">TwinLine <b>${v}</b> is available (you have ${current}).${esc(manualHint)}</span>`
         + (status.notes ? button('notes', "What's new", 'btn ghost small') : '')
-        + button('download', status.manualDownloadUrl ? 'Download page' : 'Download', 'btn primary small')
+        + button('download', status.manualDownloadUrl ? manualLabel : 'Download', 'btn primary small')
         + button('dismiss', 'Later', 'btn ghost small');
       break;
     case 'downloading': {
@@ -1241,7 +1247,7 @@ function renderUpdate(status) {
   const actions = $('updateActions');
   if (actions) {
     let extra = '';
-    if (status.state === 'available') extra = button('download', status.manualDownloadUrl ? 'Download page' : `Download ${v}`, 'btn primary small');
+    if (status.state === 'available') extra = button('download', status.manualDownloadUrl ? `${manualLabel} ${v}` : `Download ${v}`, 'btn primary small');
     else if (status.state === 'downloaded') extra = button('install', `Restart and install ${v}`, 'btn primary small');
     else if (status.state === 'downloading') extra = `<span class="bar inline-bar"><span data-width="${Math.round((status.progress && status.progress.percent) || 0)}"></span></span>`;
     actions.innerHTML = `<button type="button" class="btn small" id="btnCheckUpdates" ${status.state === 'checking' ? 'disabled' : ''}>Check for updates now</button>${extra}`;
