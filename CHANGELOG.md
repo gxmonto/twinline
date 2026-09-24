@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.6 — 2026-09-24
+
+- The incoming-call popup now always opens over the TwinLine window when the window is on screen, regardless of where it was last dragged. The remembered position is only used while TwinLine is minimised or in the tray.
+
 ## 1.4.5 — 2026-09-24
 
 - Call history is kept across restarts (it used to vanish when the app was closed).
