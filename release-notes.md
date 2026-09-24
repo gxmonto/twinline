@@ -1,1 +1,1 @@
-- The incoming-call popup now always opens over the TwinLine window when the window is on screen, regardless of where it was last dragged. The remembered position is only used while TwinLine is minimised or in the tray.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
