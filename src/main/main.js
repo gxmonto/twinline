@@ -286,30 +286,32 @@ function clampToDisplay(pos, height) {
   };
 }
 
+/** Centred over the main window, when there is one on screen to centre over. */
+function positionOverMainWindow(height) {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible() || mainWindow.isMinimized()) return null;
+  const b = mainWindow.getBounds();
+  return clampToDisplay({ x: b.x + (b.width - POPUP_WIDTH) / 2, y: b.y + (b.height - height) / 2 }, height);
+}
+
 /**
- * Where the popup goes when the user has never moved it: centred over the
- * main window, so it is seen where the person is looking and can be dragged
- * from there. (It used to go to the bottom-right of the primary display; with
- * the main window docked at a screen edge that left the popup half off-screen
- * with its grip unreachable — "stuck".) Falls back to the bottom-right corner
- * when there is no visible main window.
+ * Where the popup appears (Mike, 1.4.6): right over the phone window,
+ * whenever the phone is on screen — never at a screen edge, whatever was
+ * remembered from last time. The remembered position only matters when the
+ * phone is hidden in the tray or minimised; then it is honoured (pulled fully
+ * onto the nearest display), else the bottom-right corner is used. Dragging
+ * still works while it rings.
  */
-function defaultPopupPosition(height) {
-  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) {
-    const b = mainWindow.getBounds();
-    return clampToDisplay({ x: b.x + (b.width - POPUP_WIDTH) / 2, y: b.y + (b.height - height) / 2 }, height);
-  }
+function popupPosition(height) {
+  const over = positionOverMainWindow(height);
+  if (over) return over;
+  const saved = settings.data.behaviour.popupPosition;
+  if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) return clampToDisplay(saved, height);
   const { workArea } = screen.getPrimaryDisplay();
   return clampToDisplay({ x: workArea.x + workArea.width - POPUP_WIDTH - 24, y: workArea.y + workArea.height - height - 24 }, height);
 }
 
 function createPopup(height) {
-  const saved = settings.data.behaviour.popupPosition;
-  // A remembered spot is honoured, but pulled fully onto whatever display is
-  // nearest — monitors get unplugged and resolutions change.
-  const pos = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
-    ? clampToDisplay(saved, height)
-    : defaultPopupPosition(height);
+  const pos = popupPosition(height);
 
   popupWindow = new BrowserWindow({
     width: POPUP_WIDTH,
@@ -406,7 +408,7 @@ function resetPopupPosition() {
   settings.save();
   if (popupWindow && !popupWindow.isDestroyed()) {
     const [, h] = popupWindow.getSize();
-    const pos = defaultPopupPosition(h);
+    const pos = popupPosition(h);
     popupWindow.setPosition(pos.x, pos.y, false);
   }
   return { ok: true };
