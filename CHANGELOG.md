@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.4 — 2026-09-24
+
+- Linux: after switching from the AppImage to the .deb or .rpm, the menu could still open the deleted AppImage. The installed app now removes the launcher the AppImage left behind and points `sip:`/`tel:` links at itself.
+
 ## 1.4.3 — 2026-09-23
 
 Security fixes from the 1.4.2 audit:
