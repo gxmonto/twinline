@@ -123,9 +123,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   content must never overflow `env(titlebar-area-width)`: `.lines`/chips
   shrink (`min-width: 0`), actions are `flex: 0 0 auto`, and the smoke test
   checks `btnSettings` fits at `minWidth` 380 (1.4.5; it did not before).
-- **Popup placement** (1.4.5): first appearance is centred over the main
-  window; every position, saved or default, goes through `clampToDisplay`
-  so the grip is always reachable. `popupPosition` is still remembered.
+- **Popup placement** (1.4.6): *always* centred over the main window when it
+  is on screen (Mike: "right over the phone, not at any side"); the
+  remembered `popupPosition` is used only while the phone is minimised or in
+  the tray, else the bottom-right corner. Every position goes through
+  `clampToDisplay` so the grip is always reachable.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.
