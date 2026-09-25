@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.10 — 2026-09-25
+
+- Pop-out windows (Settings, Contacts, History, transcripts, Transfer) now open centred over the TwinLine window and always fully on screen. They used to open to the right of it, which put them off the screen whenever TwinLine sat at the right edge.
+
 ## 1.4.9 — 2026-09-25
 
 - Incoming-call popup: it opens over the TwinLine window, or in the middle of the screen when the window is minimised or in the tray. It no longer remembers a dragged position between calls, and the Settings button now centres it on the spot.
