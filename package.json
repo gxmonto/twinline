@@ -1,7 +1,7 @@
 {
   "name": "twinline",
   "productName": "TwinLine",
-  "version": "1.4.10",
+  "version": "1.4.11",
   "description": "Dual-line SIP softphone with multi-call, hold and local conference mixing",
   "main": "src/main/main.js",
   "author": {

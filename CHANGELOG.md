@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.11 — 2026-09-25
+
+- Digits typed on the keyboard during a call are now sent as tones (for phone menus like an ISP's "press 2 for billing"). They used to be typed into the number box if it still had the focus after dialling; only the on-screen keypad worked.
+
 ## 1.4.10 — 2026-09-25
 
 - Pop-out windows (Settings, Contacts, History, transcripts, Transfer) now open centred over the TwinLine window and always fully on screen. They used to open to the right of it, which put them off the screen whenever TwinLine sat at the right edge.
