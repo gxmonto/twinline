@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.9 — 2026-09-25
+
+- Incoming-call popup: it opens over the TwinLine window, or in the middle of the screen when the window is minimised or in the tray. It no longer remembers a dragged position between calls, and the Settings button now centres it on the spot.
+
 ## 1.4.8 — 2026-09-24
 
 - Windows portable: the portable exe cannot replace itself, and until now an update would silently install the full app while you kept launching the old portable file. It now offers the new portable file to download and explains what to do.
