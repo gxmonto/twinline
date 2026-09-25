@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Incoming-call popup: it opens over the TwinLine window, or in the middle of the screen when the window is minimised or in the tray. It no longer remembers a dragged position between calls, and the Settings button now centres it on the spot.

@@ -123,11 +123,13 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   content must never overflow `env(titlebar-area-width)`: `.lines`/chips
   shrink (`min-width: 0`), actions are `flex: 0 0 auto`, and the smoke test
   checks `btnSettings` fits at `minWidth` 380 (1.4.5; it did not before).
-- **Popup placement** (1.4.6): *always* centred over the main window when it
-  is on screen (Mike: "right over the phone, not at any side"); the
-  remembered `popupPosition` is used only while the phone is minimised or in
-  the tray, else the bottom-right corner. Every position goes through
-  `clampToDisplay` so the grip is always reachable.
+- **Popup placement** (1.4.9): centred over the main window when it is on
+  screen, else the centre of the phone's display (cursor's display if the
+  phone is hidden). Nothing is remembered any more (`popupPosition` is a dead
+  settings key): Mike's test laptop kept getting the popup at a screen edge
+  through 1.4.8 and he asked for "the middle of the screen". Every position
+  goes through `clampToDisplay`; the Settings button re-centres on demand;
+  the smoke test checks both the docked-phone and hidden-phone cases.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.

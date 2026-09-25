@@ -210,8 +210,8 @@ function wireEvents() {
     button.onclick = () => exportContacts(button.dataset.export);
   }
   $('btnResetPopup').onclick = async () => {
-    await guard(api.popup.resetPosition());
-    toast('Popup position reset');
+    const r = await guard(api.popup.resetPosition());
+    toast(r && r.moved ? 'Popup centred' : 'The popup will open over the phone, or in the middle of the screen');
   };
   $('btnOpenLogs').onclick = () => guard(api.log.openFolder());
   $('btnReregister').onclick = async () => {

@@ -257,10 +257,21 @@ async function runSmokeTest() {
       overMain: centre.x >= mb.x && centre.x <= mb.x + mb.width && centre.y >= mb.y && centre.y <= mb.y + mb.height,
       onScreen: px >= workArea.x && py >= workArea.y && px + pw <= workArea.x + workArea.width && py + ph <= workArea.y + workArea.height,
     };
-    popupWindow.close();
-    popupWindow = null;
+    // Wait for 'closed': its handler nulls popupWindow and must not fire after
+    // the next createPopup() has assigned the new one.
+    await new Promise((r) => { popupWindow.once('closed', r); popupWindow.close(); });
     settings.data.behaviour.popupPosition = null;
     if (!report.popup.overMain || !report.popup.onScreen) problems.push(`popup did not open over the main window: ${JSON.stringify(report.popup)}`);
+    // …and with the phone hidden (tray) it sits in the middle of the screen.
+    mainWindow.hide();
+    createPopup(44 + POPUP_CALL_HEIGHT);
+    await new Promise((r) => setTimeout(r, 400));
+    const [hx, hy] = popupWindow.getPosition();
+    const [hw, hh] = popupWindow.getSize();
+    const want = { x: Math.round(workArea.x + (workArea.width - hw) / 2), y: Math.round(workArea.y + (workArea.height - hh) / 2) };
+    report.popupHidden = { got: { x: hx, y: hy }, want, centred: Math.abs(hx - want.x) <= 2 && Math.abs(hy - want.y) <= 2 };
+    await new Promise((r) => { popupWindow.once('closed', r); popupWindow.close(); });
+    if (!report.popupHidden.centred) problems.push(`popup not centred on screen with the phone hidden: ${JSON.stringify(report.popupHidden)}`);
     panel.close();
     if (!report.panel.panelMode || !report.panel.settingsShown || !report.panel.dialerHidden) {
       problems.push(`popped-out settings panel did not render as a panel: ${JSON.stringify(report.panel)}`);
@@ -316,29 +327,31 @@ function positionOverMainWindow(height) {
   return clampToDisplay({ x: b.x + (b.width - POPUP_WIDTH) / 2, y: b.y + (b.height - height) / 2 }, height);
 }
 
+/** The display the phone lives on (or the one under the cursor when it is hidden). */
+function popupDisplay() {
+  if (mainWindow && !mainWindow.isDestroyed()) return screen.getDisplayMatching(mainWindow.getBounds());
+  try { return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); } catch { return screen.getPrimaryDisplay(); }
+}
+
 /**
- * Where the popup appears (Mike, 1.4.6): right over the phone window,
- * whenever the phone is on screen — never at a screen edge, whatever was
- * remembered from last time. The remembered position only matters when the
- * phone is hidden in the tray or minimised; then it is honoured (pulled fully
- * onto the nearest display), else the bottom-right corner is used. Dragging
- * still works while it rings.
+ * Where the popup appears (Mike, 1.4.9): right over the phone window when
+ * the phone is on screen, otherwise dead centre of the screen. Nothing is
+ * remembered any more — a remembered spot is what kept putting it at a
+ * screen edge on his test laptop — but it can still be dragged while it
+ * rings, and the Settings button re-centres it on demand.
  */
 function popupPosition(height) {
-  const over = positionOverMainWindow(height);
-  const saved = settings.data.behaviour.popupPosition;
-  let pos, reason;
-  if (over) { pos = over; reason = 'over main window'; }
-  else if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) { pos = clampToDisplay(saved, height); reason = 'remembered (main window not on screen)'; }
-  else {
-    const { workArea } = screen.getPrimaryDisplay();
-    pos = clampToDisplay({ x: workArea.x + workArea.width - POPUP_WIDTH - 24, y: workArea.y + workArea.height - height - 24 }, height);
-    reason = 'default corner';
+  let pos = positionOverMainWindow(height);
+  let reason = 'over main window';
+  if (!pos) {
+    const { workArea } = popupDisplay();
+    pos = clampToDisplay({ x: workArea.x + (workArea.width - POPUP_WIDTH) / 2, y: workArea.y + (workArea.height - height) / 2 }, height);
+    reason = 'centre of screen (main window not on screen)';
   }
   // Logged so a "it opened at the edge" report can be read straight off the log.
   const main = mainWindow && !mainWindow.isDestroyed()
     ? { bounds: mainWindow.getBounds(), visible: mainWindow.isVisible(), minimized: mainWindow.isMinimized() } : null;
-  log.info('main', 'popup placed', { reason, pos, main, saved });
+  log.info('main', 'popup placed', { reason, pos, main });
   return pos;
 }
 
@@ -374,17 +387,6 @@ function createPopup(height) {
   popupWindow.setVisibleOnAllWorkspaces?.(true);
   popupWindow.loadFile(path.join(__dirname, '..', 'renderer', 'popup.html'));
 
-  // Remember where the user drags it. Debounced: 'moved' fires continuously.
-  let saveTimer = null;
-  popupWindow.on('moved', () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      if (!popupWindow || popupWindow.isDestroyed()) return;
-      const [x, y] = popupWindow.getPosition();
-      settings.data.behaviour.popupPosition = { x, y };
-      settings.save();
-    }, 400);
-  });
   popupWindow.on('closed', () => { popupWindow = null; });
   popupWindow.webContents.on('did-finish-load', () => pushPopupCalls());
 }
@@ -434,16 +436,18 @@ function updatePopup() {
   if (!popupWindow.isVisible()) popupWindow.showInactive();
 }
 
-/** Forget the saved position and put the popup back in the default corner. */
+/** Put the popup where it belongs right now (over the phone, else screen centre). */
 function resetPopupPosition() {
-  settings.data.behaviour.popupPosition = null;
+  settings.data.behaviour.popupPosition = null;     // legacy key; no longer used
   settings.save();
+  let moved = false;
   if (popupWindow && !popupWindow.isDestroyed()) {
     const [, h] = popupWindow.getSize();
     const pos = popupPosition(h);
     popupWindow.setPosition(pos.x, pos.y, false);
+    moved = true;
   }
-  return { ok: true };
+  return { ok: true, moved };
 }
 
 /** 16-bit PCM WAV → mono Int16 at 8 kHz (nearest-sample), for the self-test. */
