@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Pop-out windows (Settings, Contacts, History, transcripts, Transfer) now open centred over the TwinLine window and always fully on screen. They used to open to the right of it, which put them off the screen whenever TwinLine sat at the right edge.
