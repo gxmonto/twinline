@@ -290,6 +290,17 @@ function wireEvents() {
 }
 
 function onGlobalKey(e) {
+  // Typed digits during a live call are DTMF, even when the keyboard focus is
+  // still in the dial box (it is, right after dialling): an IVR ("press 2 for
+  // billing") got nothing while the digits quietly appeared in the number
+  // field. Other text fields (contact search, transfer target) keep them.
+  const inCall = !PANEL && state.calls.some((c) => c.state === 'connected' && !c.localHold);
+  const inDialBox = e.target === $('dialInput');
+  if (inCall && /^[0-9*#]$/.test(e.key) && (inDialBox || !e.target.matches('input, select, textarea'))) {
+    e.preventDefault();
+    pressDigit(e.key);
+    return;
+  }
   if (e.target.matches('input, select, textarea')) {
     if (e.key === 'Escape') e.target.blur();
     return;

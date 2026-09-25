@@ -138,6 +138,10 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   when a report says "popup", check the log for `popup placed` / `panel
   placed` before assuming which window. The smoke test docks the phone right
   before opening the settings panel and checks it lands over the phone.
+- **Keyboard DTMF** (1.4.11): `onGlobalKey` sends typed digits as DTMF during
+  a connected call even when focus is in `#dialInput` (it always is after
+  dialling); other text fields keep their digits. Mike found ISP IVRs ignored
+  typed digits while keypad clicks worked.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.
