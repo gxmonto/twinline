@@ -130,6 +130,14 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   through 1.4.8 and he asked for "the middle of the screen". Every position
   goes through `clampToDisplay`; the Settings button re-centres on demand;
   the smoke test checks both the docked-phone and hidden-phone cases.
+- **Pop-out panel placement** (1.4.10): `centredOver(mainBounds, w, h)`,
+  clamped to the phone's display. They used to open 12 px to the right of the
+  phone, off-screen when the phone was docked right. Mike's reports about "the
+  popup moving to the right" (1.4.5–1.4.9) were about *these* windows, not the
+  incoming-call popup — the log showed no call had rung on his PC. Lesson:
+  when a report says "popup", check the log for `popup placed` / `panel
+  placed` before assuming which window. The smoke test docks the phone right
+  before opening the settings panel and checks it lands over the phone.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.

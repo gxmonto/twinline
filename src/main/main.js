@@ -190,12 +190,28 @@ async function runSmokeTest() {
     }
 
     // A popped-out panel must render just that dialog.
+    // Dock the phone at the right screen edge first: a pop-out panel must
+    // still open over it and fully on screen (it used to open off the edge).
+    const dock = screen.getDisplayMatching(mainWindow.getBounds()).workArea;
+    const [mw, mh] = mainWindow.getSize();
+    mainWindow.setPosition(dock.x + dock.width - mw, dock.y + 40, false);
     openPanel('settings');
     const panel = panels.get('settings:');
     await new Promise((resolve, reject) => {
       panel.webContents.once('did-finish-load', resolve);
       setTimeout(() => reject(new Error('panel load timed out')), 15000);
     });
+    {
+      const pb = panel.getBounds();
+      const mb = mainWindow.getBounds();
+      const cx = pb.x + pb.width / 2, cy = pb.y + pb.height / 2;
+      report.panelPlace = {
+        main: mb, panel: pb,
+        overMain: cx >= mb.x && cx <= mb.x + mb.width && cy >= mb.y && cy <= mb.y + mb.height,
+        onScreen: pb.x >= dock.x && pb.y >= dock.y && pb.x + pb.width <= dock.x + dock.width && pb.y + pb.height <= dock.y + dock.height,
+      };
+      if (!report.panelPlace.overMain || !report.panelPlace.onScreen) problems.push(`pop-out panel did not open over the main window: ${JSON.stringify(report.panelPlace)}`);
+    }
     // The panel page opens its dialog only after it has fetched the settings
     // over IPC; on a slow shared CI runner that can take seconds, so poll for
     // it rather than guess a delay (a fixed 800 ms made CI fail one run in four).
@@ -559,6 +575,23 @@ const PANEL_SIZES = {
  * "panel mode" (?panel=...), which shows only that dialog with a draggable
  * title bar; closing the dialog closes the window.
  */
+/**
+ * A window of width×height centred over `anchor`, kept fully inside the work
+ * area of the display the anchor is on. Pop-out panels used to open 12 px to
+ * the *right* of the phone window; with the phone docked at the right edge of
+ * the screen that put the panel off-screen, where it could not be reached —
+ * what Mike reported as the "popup" being "moved to the right" (1.4.10).
+ */
+function centredOver(anchor, width, height) {
+  const { workArea } = screen.getDisplayMatching(anchor);
+  const x = Math.round(anchor.x + (anchor.width - width) / 2);
+  const y = Math.round(anchor.y + (anchor.height - height) / 2);
+  return {
+    x: Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width)),
+    y: Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height)),
+  };
+}
+
 function openPanel(name, params = {}) {
   if (!PANEL_SIZES[name]) throw new Error(`unknown panel "${name}"`);
   const key = `${name}:${params.call || params.file || ''}`;
@@ -567,12 +600,13 @@ function openPanel(name, params = {}) {
 
   const size = PANEL_SIZES[name];
   const anchor = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+  const pos = anchor ? centredOver(anchor, size.width, size.height) : {};
+  log.info('main', 'panel placed', { name, pos, anchor });
   const win = new BrowserWindow({
     ...size,
     minWidth: 340,
     minHeight: 260,
-    x: anchor ? anchor.x + anchor.width + 12 : undefined,
-    y: anchor ? anchor.y : undefined,
+    ...pos,
     ...TITLE_BAR,
     show: false,
     backgroundColor: '#1a1f29',
