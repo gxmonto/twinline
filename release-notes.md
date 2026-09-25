@@ -1,1 +1,1 @@
-- Digits typed on the keyboard during a call are now sent as tones (for phone menus like an ISP's "press 2 for billing"). They used to be typed into the number box if it still had the focus after dialling; only the on-screen keypad worked.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
