@@ -177,8 +177,10 @@ test('hold and resume: the peer sees it, and recvonly is not misread as their ho
   assert.strictEqual(outgoing.rtp.sending, true);
   assert.strictEqual(env.audio.mixer.getLegMode(outgoing.id), 'idle');
   assert.strictEqual(outgoing.rtp.receiving, false, 'we stop listening to a call we put on hold');
-  // The held party was told sendonly, so it stops transmitting to us.
-  assert.strictEqual(inbound.rtp.sending, false);
+  // The held party, told sendonly, keeps transmitting anyway (1.4.12): a
+  // stream nobody listens to is harmless, and a PBX whose hold state has
+  // drifted may still be bridging it. It just is not fed to the mixer.
+  assert.strictEqual(inbound.rtp.sending, true);
 
   await outgoing.unhold();
   await waitFor(() => inbound.remoteHold === false, { label: 'peer notices the resume' });
@@ -188,6 +190,45 @@ test('hold and resume: the peer sees it, and recvonly is not misread as their ho
   assert.strictEqual(outgoing.rtp.receiving, true);
   assert.strictEqual(inbound.rtp.sending, true);
   assert.strictEqual(env.audio.mixer.getLegMode(outgoing.id), 'active');
+});
+
+test('a resume the peer answers with sendonly is offered again, and we keep sending meanwhile', async (t) => {
+  const env = await makePair(13);
+  t.after(() => env.teardown());
+  const { outgoing, inbound } = await connectedPair(env);
+
+  await outgoing.hold();
+  await waitFor(() => inbound.remoteHold === true, { label: 'peer notices the hold' });
+
+  // Play a PBX whose hold state has drifted: it answers the first resume
+  // offer with sendonly ("I will not receive"), then behaves on the second.
+  const realBuild = inbound._buildSdp.bind(inbound);
+  let wrongAnswers = 0;
+  inbound._buildSdp = (direction) => {
+    if (wrongAnswers === 0 && direction === 'sendrecv') { wrongAnswers += 1; return realBuild('sendonly'); }
+    return realBuild(direction);
+  };
+  const warnings = [];
+  outgoing.on('warning', (w) => warnings.push(w));
+
+  await outgoing.unhold();
+  assert.strictEqual(wrongAnswers, 1, 'the drifted answer was given once');
+  assert.strictEqual(outgoing.remoteDirection, 'sendrecv', 'the second offer settled it');
+  assert.strictEqual(outgoing.remoteHold, false);
+  assert.strictEqual(outgoing.rtp.sending, true);
+  assert.strictEqual(outgoing.rtp.receiving, true);
+  assert.deepStrictEqual(warnings, [], 'no warning when the retry succeeds');
+
+  // And when even the retry is refused, the user is told rather than left guessing.
+  await outgoing.hold();
+  await waitFor(() => inbound.remoteHold === true, { label: 'held again' });
+  inbound._buildSdp = (direction) => realBuild(direction === 'sendrecv' ? 'sendonly' : direction);
+  await outgoing.unhold();
+  assert.strictEqual(outgoing.remoteDirection, 'sendonly');
+  assert.strictEqual(outgoing.remoteHold, true, 'their answer says they will not receive: shown as held by peer');
+  assert.strictEqual(outgoing.rtp.sending, true, 'we still transmit; a PBX in a muddle may be bridging it anyway');
+  assert.strictEqual(warnings.length, 1);
+  assert.match(warnings[0], /answered the resume with "sendonly"/);
 });
 
 test('both sides holding each other resolves to inactive', async (t) => {

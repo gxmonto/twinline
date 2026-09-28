@@ -89,6 +89,20 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   means they hold us (they may still send MoH; we keep receiving). Their
   `a=recvonly` answer to our hold is compliance, not a hold. `c=IN IP4 0.0.0.0`
   is legacy hold, never a destination (Vital sends it; caused `EADDRNOTAVAIL 0.0.0.0`).
+  Rules since 1.4.12 (Mike lost a conference: after any resume the other
+  side could not hear him and showed "held by peer" until he transferred):
+  *offers* carry only our intent (`_localDirection`: sendonly while we hold,
+  else sendrecv — never `recvonly` because of remoteHold, which was a trap:
+  one odd answer to a resume made every later offer say "I will not send");
+  *answers* follow RFC 3264 §6.1 (`SDP.answerDirection`: sendonly→recvonly,
+  or inactive if we hold too; recvonly→sendonly; inactive→inactive);
+  remoteHold is read from an *offer* as sendonly/inactive, from an *answer*
+  as sendonly/inactive when we offered sendrecv, or inactive only while we
+  hold them (recvonly = compliance). We transmit whenever the media line is
+  alive and has an address, whatever they claim about receiving. A resume
+  answered with anything but sendrecv is offered once more (800 ms), then a
+  warning toast names the direction they answered. Every SDP applied is
+  logged as `sdp <role>` with offered/concluded — ask for those lines.
 - **Sockets bind to 0.0.0.0**, never a specific IP: a bound IP that vanishes
   (VPN, Wi-Fi roam, sleep, Docker's vEthernet) fails every send with
   `EADDRNOTAVAIL <valid public ip>` — that was the "people stopped getting

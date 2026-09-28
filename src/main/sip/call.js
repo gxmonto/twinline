@@ -151,12 +151,24 @@ class Call extends EventEmitter {
     return this.rtp;
   }
 
-  /** The direction we advertise, given who is holding whom. */
+  /**
+   * The direction our *offers* carry: our own intent only. We hold them →
+   * sendonly; otherwise sendrecv. Whether *they* hold us is for their answer
+   * to say (sendonly / inactive), never for our offer to pre-empt.
+   *
+   * It used to offer `recvonly` whenever remoteHold was set. That was a trap:
+   * one odd answer to a resume (a PBX with stale hold state, Vital's
+   * `c=0.0.0.0`) set remoteHold, every later offer then told the PBX "I will
+   * not send", the PBX obliged, the other person could no longer hear us, and
+   * Hold/Resume could not break out of it. Mike lost a conference to it.
+   */
   _localDirection() {
-    if (this.localHold && this.remoteHold) return 'inactive';
-    if (this.localHold) return this.ua.config.holdDirection || 'sendonly';
-    if (this.remoteHold) return 'recvonly';
-    return 'sendrecv';
+    return this.localHold ? (this.ua.config.holdDirection || 'sendonly') : 'sendrecv';
+  }
+
+  /** Direction for an answer to the offer we just applied (RFC 3264 §6.1). */
+  _answerDirection() {
+    return SDP.answerDirection(this.remoteDirection, { localHold: this.localHold, holdDirection: this.ua.config.holdDirection || 'sendonly' });
   }
 
   _buildSdp(direction = this._localDirection()) {
@@ -176,8 +188,13 @@ class Call extends EventEmitter {
     });
   }
 
-  /** Apply a remote SDP (offer or answer) to the RTP session. */
-  _applyRemoteSdp(body) {
+  /**
+   * Apply a remote SDP (offer or answer) to the RTP session. `role` is only
+   * for the log: every negotiation is recorded (direction, address, what we
+   * concluded) so a "they could not hear me after resume" report can be
+   * diagnosed from the ordinary log, without a SIP trace.
+   */
+  _applyRemoteSdp(body, role = 'sdp') {
     if (!body) return false;
     const sdp = SDP.parse(body);
     const media = SDP.audioMedia(sdp);
@@ -213,6 +230,7 @@ class Call extends EventEmitter {
       receiveMap,
     });
 
+    this.remoteUnspecified = unspecified;   // c=0.0.0.0: nowhere to send to
     if (media.port === 0) {
       this.remoteDirection = 'inactive';
     } else if (unspecified) {
@@ -228,18 +246,25 @@ class Call extends EventEmitter {
     //
     // Hold is signalled by the peer no longer wanting to *receive* — a held
     // party is told `a=sendonly`, because the holder may still send music on
-    // hold. So `sendonly` from them means we are held, even though they are
-    // still transmitting.
+    // hold. So `sendonly` (or `inactive`) in an *offer* from them means we
+    // are held, whether or not we hold them as well.
     //
-    // While we hold them, the correct answer to our `a=sendonly` is
-    // `a=recvonly`: that is them complying, not them holding us. Only
-    // `a=inactive` in that situation means both sides are on hold.
+    // An *answer* is read against what we offered. While we hold them, the
+    // correct answer to our `a=sendonly` is `a=recvonly`: that is them
+    // complying, not them holding us; only `a=inactive` means both sides
+    // hold. When we offered sendrecv, `sendonly`/`inactive` back means they
+    // hold us; `recvonly` back means they still hear us, so it is not a hold.
+    const isOffer = /offer/.test(role);
+    const theyWontReceive = this.remoteDirection === 'sendonly' || this.remoteDirection === 'inactive';
     const wasRemoteHold = this.remoteHold;
-    this.remoteHold = this.localHold
-      ? this.remoteDirection === 'inactive'
-      : this.remoteDirection !== 'sendrecv';
+    this.remoteHold = isOffer || !this.localHold ? theyWontReceive : this.remoteDirection === 'inactive';
     if (wasRemoteHold !== this.remoteHold) this.emit('remoteHold', this.remoteHold);
 
+    this.ua.log.info(`sdp ${role}`, {
+      call: this.id.slice(0, 8), remote: this.remoteNumber,
+      offered: media.direction || '(none)', address: address || '(none)', port: media.port,
+      concluded: { remoteDirection: this.remoteDirection, localHold: this.localHold, remoteHold: this.remoteHold },
+    });
     this._applyMediaFlow();
     return true;
   }
@@ -258,8 +283,13 @@ class Call extends EventEmitter {
     const peerSends = direction === 'sendrecv' || direction === 'sendonly';
     const peerReceives = direction === 'sendrecv' || direction === 'recvonly';
 
+    // We transmit whenever the media line is alive, whatever the peer says
+    // about receiving: a PBX whose hold state has drifted (it answered our
+    // resume with sendonly) may still be bridging our audio, and a stream
+    // nobody listens to costs nothing. Only `inactive` / port 0 stops it.
+    void peerReceives;
     this.rtp.setDirection({
-      sending: peerReceives || this.localHold,
+      sending: direction !== 'inactive' && !this.remoteUnspecified,
       receiving: peerSends && !this.localHold,
     });
 
@@ -472,7 +502,7 @@ class Call extends EventEmitter {
     }
     // Early media: a provisional carrying SDP means audio before answer.
     if (response.body && P.getHeader(response, 'content-type') === 'application/sdp') {
-      if (this._applyRemoteSdp(response.body)) {
+      if (this._applyRemoteSdp(response.body, 'INVITE answer')) {
         this.ua.audio.setLegMode(this.id, 'active');
         this.emit('earlyMedia');
       }
@@ -517,7 +547,7 @@ class Call extends EventEmitter {
       this._absorbDialogState(response, true);
       this.ua.registerDialog(this);
 
-      if (response.body) this._applyRemoteSdp(response.body);
+      if (response.body) this._applyRemoteSdp(response.body, 'INVITE answer');
 
       // ACK the 2xx ourselves (§13.2.2.4) and keep it for retransmissions.
       this.lastAck = this._buildAckFor2xx(response);
@@ -607,7 +637,7 @@ class Call extends EventEmitter {
 
     const contentType = (P.getHeader(request, 'content-type') || '').toLowerCase();
     if (request.body && contentType.includes('application/sdp')) {
-      if (!this._applyRemoteSdp(request.body)) {
+      if (!this._applyRemoteSdp(request.body, 'INVITE offer')) {
         txn.respond(this.ua.makeDialogResponse(request, 488, this));
         this._finish('incompatible', 488, 'No common codec');
         return;
@@ -630,7 +660,7 @@ class Call extends EventEmitter {
     await this._ensureMedia();
 
     const response = this.ua.makeDialogResponse(request, 200, this);
-    response.body = this._buildSdp(this.remoteHold ? 'recvonly' : 'sendrecv');
+    response.body = this._buildSdp(this._answerDirection());
     response.headers['content-type'] = ['application/sdp'];
     response.headers.allow = [this.ua.allowHeader()];
     response.headers.supported = ['replaces, timer'];
@@ -719,8 +749,8 @@ class Call extends EventEmitter {
       }
       case 'UPDATE': {
         const response = this.ua.makeDialogResponse(request, 200, this);
-        if (request.body) this._applyRemoteSdp(request.body);
-        response.body = this._buildSdp();
+        if (request.body) this._applyRemoteSdp(request.body, 'UPDATE offer');
+        response.body = this._buildSdp(request.body ? this._answerDirection() : undefined);
         response.headers['content-type'] = ['application/sdp'];
         txn.respond(response);
         this.emit('update');
@@ -744,9 +774,9 @@ class Call extends EventEmitter {
     this.ackReceived = true;
     this._stopOkRetransmit();
     // An INVITE with no offer carries the answer in the ACK.
-    if (request.body && !this.hasRemoteOffer) this._applyRemoteSdp(request.body);
+    if (request.body && !this.hasRemoteOffer) this._applyRemoteSdp(request.body, 'ACK answer');
     if (this._pendingReinviteAnswer) {
-      this._applyRemoteSdp(this._pendingReinviteAnswer);
+      this._applyRemoteSdp(this._pendingReinviteAnswer, 'ACK answer');
       this._pendingReinviteAnswer = null;
     }
   }
@@ -760,13 +790,13 @@ class Call extends EventEmitter {
 
     if (request.body) {
       const before = this.remoteHold;
-      this._applyRemoteSdp(request.body);
+      this._applyRemoteSdp(request.body, 're-INVITE offer');
       if (before !== this.remoteHold) this.emit('update');
     }
 
     const response = this.ua.makeDialogResponse(request, 200, this);
     this.localSdpVersion += 1;
-    response.body = this._buildSdp();
+    response.body = this._buildSdp(request.body ? this._answerDirection() : undefined);
     response.headers['content-type'] = ['application/sdp'];
     response.headers.contact = [this.ua.contactHeader()];
     txn.respond(response);
@@ -796,6 +826,18 @@ class Call extends EventEmitter {
     this._applyMediaFlow();
     this.emit('update');
     await this._reinvite();
+    // A resume is only a resume if the peer agrees to sendrecv. Mike saw a
+    // PBX answer the resume with something else, leaving the other person
+    // "held" and unable to hear him. Offer once more — PBX hold state that
+    // has drifted usually settles on the second offer — then say so plainly.
+    if (this.state === 'connected' && !this.localHold && this.remoteDirection !== 'sendrecv') {
+      this.ua.log.warn('resume was not answered with sendrecv; offering again', { call: this.id.slice(0, 8), answered: this.remoteDirection });
+      await new Promise((r) => setTimeout(r, 800));
+      if (this.state === 'connected' && !this.localHold) await this._reinvite();
+      if (this.state === 'connected' && !this.localHold && this.remoteDirection !== 'sendrecv') {
+        this.emit('warning', `${this.remoteNumber || 'The other party'} answered the resume with "${this.remoteDirection}" — their side still treats the call as on hold. Try Hold and Resume again.`);
+      }
+    }
   }
 
   /** Send a re-INVITE carrying the current local SDP. */
@@ -815,7 +857,7 @@ class Call extends EventEmitter {
       }
       if (response.status >= 200 && response.status < 300) {
         this._absorbDialogState(response, true);
-        if (response.body) this._applyRemoteSdp(response.body);
+        if (response.body) this._applyRemoteSdp(response.body, 're-INVITE answer');
         this.lastAck = this._buildAckFor2xx(response);
         this.ua.transactions.send(this.lastAck, this.ua.target).catch(() => {});
         this._applyMediaFlow();

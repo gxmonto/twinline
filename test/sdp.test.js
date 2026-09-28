@@ -20,6 +20,18 @@ const OFFER = [
   '',
 ].join('\r\n');
 
+test('an answer only ever narrows the offer (RFC 3264 §6.1)', () => {
+  const a = SDP.answerDirection;
+  assert.strictEqual(a('sendrecv'), 'sendrecv');
+  assert.strictEqual(a(undefined), 'sendrecv');
+  assert.strictEqual(a('sendrecv', { localHold: true }), 'sendonly', 'we hold them: our answer says so');
+  assert.strictEqual(a('sendonly'), 'recvonly', 'they hold us');
+  assert.strictEqual(a('sendonly', { localHold: true }), 'inactive', 'both hold: never sendonly-to-sendonly');
+  assert.strictEqual(a('recvonly'), 'sendonly');
+  assert.strictEqual(a('inactive'), 'inactive');
+  assert.strictEqual(a('inactive', { localHold: true }), 'inactive');
+});
+
 test('parses an offer', () => {
   const sdp = SDP.parse(OFFER);
   const media = SDP.audioMedia(sdp);
