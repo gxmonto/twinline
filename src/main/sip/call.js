@@ -285,11 +285,13 @@ class Call extends EventEmitter {
 
     // We transmit whenever the media line is alive, whatever the peer says
     // about receiving: a PBX whose hold state has drifted (it answered our
-    // resume with sendonly) may still be bridging our audio, and a stream
-    // nobody listens to costs nothing. Only `inactive` / port 0 stops it.
+    // resume with sendonly, or with the old-style `c=0.0.0.0`) may still be
+    // bridging our audio, and a stream nobody listens to costs nothing. Only
+    // `inactive` / port 0 stops it. With `c=0.0.0.0` the RTP session keeps
+    // the last real address, so the stream goes where it went before.
     void peerReceives;
     this.rtp.setDirection({
-      sending: direction !== 'inactive' && !this.remoteUnspecified,
+      sending: direction !== 'inactive',
       receiving: peerSends && !this.localHold,
     });
 
