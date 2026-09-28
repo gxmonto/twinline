@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.12 — 2026-09-28
+
+- Hold and resume: fixes a call getting stuck "held by peer" after a resume, with the other person unable to hear you until the call was transferred (it hit a conference attempt). The app no longer tells the PBX it will not send audio after an odd answer, offers the resume a second time if the PBX does not accept it, and warns if it still refuses.
+- Both sides holding each other is now recognised correctly, and answers to the PBX's own hold and resume requests follow the standard exactly.
+- The log now records every media negotiation (who offered what, what was concluded), so hold problems can be diagnosed without a full SIP trace.
+
 ## 1.4.11 — 2026-09-25
 
 - Digits typed on the keyboard during a call are now sent as tones (for phone menus like an ISP's "press 2 for billing"). They used to be typed into the number box if it still had the focus after dialling; only the on-screen keypad worked.
