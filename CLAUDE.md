@@ -99,7 +99,10 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   remoteHold is read from an *offer* as sendonly/inactive, from an *answer*
   as sendonly/inactive when we offered sendrecv, or inactive only while we
   hold them (recvonly = compliance). We transmit whenever the media line is
-  alive and has an address, whatever they claim about receiving. A resume
+  alive, whatever they claim about receiving — including `c=0.0.0.0` in an
+  *answer* (1.4.13: the RTP session keeps the last real address and the
+  stream goes on; before, we went silent, which is the likeliest cause of
+  Mike's "resumed and they could not hear me" on Vital). A resume
   answered with anything but sendrecv is offered once more (800 ms), then a
   warning toast names the direction they answered. Every SDP applied is
   logged as `sdp <role>` with offered/concluded — ask for those lines.
@@ -319,6 +322,9 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   each other with real RTP — extend them for any SIP/media change. The
   transcription pipeline has fake-sherpa tests (`test/transcribe.test.js`) and
   fake-worker plumbing tests (`test/service.test.js`).
+- The two-line sequence Mike hit (hold on line 1, dial on line 2, resume
+  line 1) is a loopback test that checks real packet flow after the resume;
+  it passes, so any recurrence is PBX behaviour — get the `sdp` log lines.
 - Provider behaviour cannot be simulated; when a fix targets JetWave/Vital,
   say so and ask Mike to verify on a real call. The log
   (`Settings → General → Open log folder`, optional SIP trace) is the evidence

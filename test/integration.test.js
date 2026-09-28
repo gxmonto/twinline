@@ -231,6 +231,90 @@ test('a resume the peer answers with sendonly is offered again, and we keep send
   assert.match(warnings[0], /answered the resume with "sendonly"/);
 });
 
+test('a resume answered with c=0.0.0.0 keeps our audio going to the last address, and is offered again', async (t) => {
+  const env = await makePair(14);
+  t.after(() => env.teardown());
+  const { outgoing, inbound } = await connectedPair(env);
+  const realRemote = { ...outgoing.rtp.remote };
+
+  await outgoing.hold();
+  await waitFor(() => inbound.remoteHold === true, { label: 'peer notices the hold' });
+
+  // A Vital-style PBX: its answer to the resume still carries the old-style
+  // hold address, once.
+  const realBuild = inbound._buildSdp.bind(inbound);
+  let legacy = 0;
+  inbound._buildSdp = (direction) => {
+    const sdp = realBuild(direction);
+    if (direction === 'sendrecv' && legacy === 0) { legacy += 1; return sdp.replace(/c=IN IP4 [^\r\n]+/, 'c=IN IP4 0.0.0.0'); }
+    return sdp;
+  };
+  const sentBefore = outgoing.rtp.stats.packetsSent;
+  await outgoing.unhold();
+  assert.strictEqual(legacy, 1);
+  assert.strictEqual(outgoing.remoteDirection, 'sendrecv', 'the second offer was answered properly');
+  assert.strictEqual(outgoing.remoteHold, false);
+  assert.deepStrictEqual(outgoing.rtp.remote, realRemote, 'never pointed at 0.0.0.0');
+  assert.ok(outgoing.rtp.stats.packetsSent > sentBefore, 'our stream never stopped');
+  assert.strictEqual(outgoing.rtp.stats.sendErrors || 0, 0);
+});
+
+test('two lines: hold a call on line 1, dial out on line 2, resume line 1 — the first caller still gets our audio', async (t) => {
+  // Mike's report (2026-09-28): exactly this, and the first person could not
+  // hear him after the resume. On loopback every leg is checked for real
+  // packet flow, not just flags.
+  const env = await makePair(70);
+  t.after(() => env.teardown());
+  const p = BASE_PORT + 70;
+  const line2 = new UserAgent(accountConfig('alice2', p + 2, p + 3), env.audio);
+  const carol = new UserAgent(accountConfig('carol', p + 3, p + 2), env.audio);
+  await line2.start(); await carol.start();
+  t.after(async () => { await line2.stop({ unregister: false }).catch(() => {}); await carol.stop({ unregister: false }).catch(() => {}); });
+  const incoming2 = [];
+  carol.on('call', (c) => incoming2.push(c));
+
+  const manager = new CallManager({ audio: env.audio, maxCalls: 4 });
+  manager.accounts.set('alice', env.alice);
+  manager.accounts.set('alice2', line2);
+  env.alice.on('call', (c) => manager._trackCall(c));
+  line2.on('call', (c) => manager._trackCall(c));
+
+  // Someone (bob) calls line 1; answered.
+  const before = env.incoming.length;
+  const bobOut = await env.bob.dial('alice');
+  const first = await waitFor(() => env.incoming.slice(before).find((c) => c !== bobOut && c.state === 'incoming'), { label: 'bob calling line 1' });
+  await manager.answer(first.id);
+  await waitFor(() => first.state === 'connected' && bobOut.state === 'connected', { label: 'first call up' });
+
+  // Hold, then dial carol on line 2 and connect.
+  await manager.hold(first.id);
+  await waitFor(() => bobOut.remoteHold === true, { label: 'bob held' });
+  const second = await manager.dial('carol', { accountId: 'alice2' });
+  const carolIn = await waitFor(() => incoming2.find((c) => c.state === 'incoming'), { label: 'carol ringing' });
+  await carolIn.accept();
+  const secondCall = manager.calls.get(second.id);
+  await waitFor(() => carolIn.state === 'connected' && secondCall.state === 'connected', { label: 'second call up' });
+  assert.strictEqual(env.audio.mixer.getLegMode(secondCall.id), 'active');
+
+  // Resume the first call: line 2 goes on hold, line 1 comes back.
+  await manager.unhold(first.id);
+  await waitFor(() => bobOut.remoteHold === false, { label: 'bob sees the resume' });
+  assert.strictEqual(first.localHold, false);
+  assert.strictEqual(first.remoteHold, false);
+  assert.strictEqual(first.remoteDirection, 'sendrecv');
+  assert.strictEqual(secondCall.localHold, true, 'the line-2 call was put on hold');
+  assert.strictEqual(env.audio.mixer.getLegMode(first.id), 'active');
+  assert.strictEqual(env.audio.mixer.getLegMode(secondCall.id), 'idle');
+  assert.strictEqual(first.rtp.sending, true);
+  assert.strictEqual(bobOut.rtp.receiving, true, 'bob is listening');
+
+  // The proof: bob keeps receiving our packets after the resume.
+  const got = bobOut.rtp.stats.packetsReceived;
+  await sleep(250);
+  assert.ok(bobOut.rtp.stats.packetsReceived > got + 5, `bob received ${bobOut.rtp.stats.packetsReceived - got} packets after the resume`);
+  assert.strictEqual(first.rtp.stats.sendErrors || 0, 0);
+});
+
 test('both sides holding each other resolves to inactive', async (t) => {
   const env = await makePair(16);
   t.after(() => env.teardown());
@@ -568,7 +652,7 @@ test('c=0.0.0.0 from the peer is treated as hold, never as a destination', async
   assert.strictEqual(inbound._applyRemoteSdp(legacyHold), true);
 
   assert.strictEqual(inbound.remoteHold, true, 'zero address reads as the peer holding us');
-  assert.strictEqual(inbound.rtp.sending, false, 'we stop sending to a peer that will not receive');
+  assert.strictEqual(inbound.rtp.sending, true, 'we keep sending, to the last real address (1.4.13)');
   assert.deepStrictEqual(inbound.rtp.remote, realRemote, 'the last real address is kept');
 
   await sleep(150);
