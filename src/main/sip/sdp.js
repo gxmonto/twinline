@@ -237,9 +237,25 @@ function findTelephoneEvent(media) {
   return null;
 }
 
+/**
+ * The direction our *answer* must carry for a given offer (RFC 3264 §6.1):
+ * an answer may only narrow what the offer allows. `sendonly` offered means
+ * they will not receive, so we answer `recvonly` — or `inactive` if we are
+ * holding them too. Answering `sendonly` to `sendonly` (which we used to do
+ * while holding) is invalid and leaves a PBX guessing who holds whom.
+ */
+function answerDirection(offerDirection, { localHold = false, holdDirection = 'sendonly' } = {}) {
+  const offer = offerDirection || 'sendrecv';
+  if (offer === 'inactive') return 'inactive';
+  if (offer === 'sendonly') return localHold ? 'inactive' : 'recvonly';
+  if (offer === 'recvonly') return 'sendonly';
+  return localHold ? holdDirection : 'sendrecv';
+}
+
 module.exports = {
   parse,
   build,
+  answerDirection,
   audioMedia,
   mediaAddress,
   directionFlags,
