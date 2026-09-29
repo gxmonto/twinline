@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.14 — 2026-09-29
+
+- Settings, History, Contacts, Transfer and the transcript view no longer stack on top of each other inside the window. Opening one closes the others, so a dialog can no longer end up hidden behind another with its close button out of reach.
+
 ## 1.4.13 — 2026-09-28
 
 - Hold and resume: if the PBX answers a resume with the old-style "no address" hold (Vital does this), TwinLine now keeps sending your audio to where it was going, instead of going silent — the likely reason the other person could not hear you after a resume. The resume is also offered a second time and a warning appears if the PBX keeps refusing it.
