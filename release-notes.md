@@ -1,1 +1,3 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Settings, History and Contacts now open as their own windows straight from the title bar, so nothing gets clipped at small window sizes.
+- New DND button (Do not disturb): while it is on, incoming calls are declined as busy so the PBX can send them on to voicemail or the next phone. It is also in the tray menu, survives restarts, and declined calls show in History with a DND tag.
+- After an update, a "What's new" dialog shows this version's changes once. "Don't show again for this version" hides it until the next update; Settings has a button to read it any time.

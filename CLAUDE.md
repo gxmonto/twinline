@@ -159,6 +159,18 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   a connected call even when focus is in `#dialInput` (it always is after
   dialling); other text fields keep their digits. Mike found ISP IVRs ignored
   typed digits while keypad clicks worked.
+- **Dialogs open as their own windows** (1.4.15): in the phone window,
+  `openSettings/openHistory/openContacts` call `api.window.openPanel(...)`
+  (Mike: the History sheet clipped its ✕ at the minimum window size). The
+  in-window sheets still serve the panel windows, Transfer and What's new.
+- **DND** (1.4.15): `manager.dnd` → an incoming INVITE is answered 486 before
+  anything rings; `call.dndRejected` marks history (`dnd: true`) and the
+  callEnded event. Persisted in `behaviour.dnd`; tray menu checkbox; main.js
+  `setDnd()` keeps manager/settings/tray/windows in step.
+- **What's new** (1.4.15): `tools/release.js` writes
+  `src/assets/whats-new.json` `{version, date, notes}` in the release commit;
+  `maybeShowWhatsNew()` sends it to the phone window 1.2 s after load when
+  the version matches and `behaviour.whatsNewSeen` differs. Never in smoke.
 - **In-window dialogs are exclusive** (1.4.14): `showOverlay(id)` hides the
   other overlays first. They stack by DOM order, so Settings (first in the
   DOM) opened after Contacts sat underneath it with its ✕ unreachable. The

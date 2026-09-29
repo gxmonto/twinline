@@ -81,6 +81,16 @@ contextBridge.exposeInMainWorld('twinline', {
     dismiss: () => ipcRenderer.send('popup:dismiss'),
   },
 
+  dnd: {
+    /** Do not disturb: incoming calls are declined as busy while on. Returns the state snapshot. */
+    set: (on) => call('dnd:set', { on }),
+  },
+
+  whatsNew: {
+    get: () => call('whatsnew:get'),
+    dismiss: (version) => call('whatsnew:dismiss', { version }),
+  },
+
   log: {
     openFolder: () => call('log:open'),
   },
@@ -157,6 +167,7 @@ contextBridge.exposeInMainWorld('twinline', {
     modelsStatus: (fn) => on('models:status', fn),
     windowState: (fn) => on('window:state', fn),
     settings: (fn) => on('settings', fn),
+    whatsNew: (fn) => on('whatsnew', fn),
     contactsChanged: (fn) => on('contacts:changed', fn),
     dialPrefill: (fn) => on('dial:prefill', fn),
   },
