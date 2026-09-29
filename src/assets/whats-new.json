@@ -1,5 +1,5 @@
 {
-  "version": "1.4.15",
+  "version": "1.4.16",
   "date": "2026-09-29",
-  "notes": "- Settings, History and Contacts now open as their own windows straight from the title bar, so nothing gets clipped at small window sizes.\n- New DND button (Do not disturb): while it is on, incoming calls are declined as busy so the PBX can send them on to voicemail or the next phone. It is also in the tray menu, survives restarts, and declined calls show in History with a DND tag.\n- After an update, a \"What's new\" dialog shows this version's changes once. \"Don't show again for this version\" hides it until the next update; Settings has a button to read it any time."
+  "notes": "- Pop-out windows (Settings, History, Contacts) never open larger than the screen, so the close button always stays reachable on small laptop screens.\n- New setting under Behaviour: open Settings, History and Contacts in their own windows (default) or inside the phone window.\n- A minimised pop-out window comes back to the front when you press its icon again.\n- The pop-out windows now have the Contacts, History and Settings icons in their corner, like the phone window, so you can move between them directly."
 }
