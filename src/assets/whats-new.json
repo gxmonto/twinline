@@ -1,5 +1,5 @@
 {
-  "version": "1.4.17",
+  "version": "1.4.18",
   "date": "2026-09-29",
-  "notes": "- Pop-out windows (Settings, History, Contacts, transcripts, Transfer) now have a single header row like the phone window: the dialog title on the left and minimise, maximise and close in the corner. The extra title bar, the duplicate ✕, and the Contacts/History/Settings icons added in 1.4.16 are gone."
+  "notes": "- Call history shows the caller's number under the name, so an entry labelled by the PBX (like \"ISP Visit - TOLL FREE CALL\") still tells you who it was."
 }

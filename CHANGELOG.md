@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.18 — 2026-09-29
+
+- Call history shows the caller's number under the name, so an entry labelled by the PBX (like "ISP Visit - TOLL FREE CALL") still tells you who it was.
+
 ## 1.4.17 — 2026-09-29
 
 - Pop-out windows (Settings, History, Contacts, transcripts, Transfer) now have a single header row like the phone window: the dialog title on the left and minimise, maximise and close in the corner. The extra title bar, the duplicate ✕, and the Contacts/History/Settings icons added in 1.4.16 are gone.
