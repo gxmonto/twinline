@@ -1,5 +1,5 @@
 {
-  "version": "1.4.16",
+  "version": "1.4.17",
   "date": "2026-09-29",
-  "notes": "- Pop-out windows (Settings, History, Contacts) never open larger than the screen, so the close button always stays reachable on small laptop screens.\n- New setting under Behaviour: open Settings, History and Contacts in their own windows (default) or inside the phone window.\n- A minimised pop-out window comes back to the front when you press its icon again.\n- The pop-out windows now have the Contacts, History and Settings icons in their corner, like the phone window, so you can move between them directly."
+  "notes": "- Pop-out windows (Settings, History, Contacts, transcripts, Transfer) now have a single header row like the phone window: the dialog title on the left and minimise, maximise and close in the corner. The extra title bar, the duplicate ✕, and the Contacts/History/Settings icons added in 1.4.16 are gone."
 }
