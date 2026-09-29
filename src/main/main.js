@@ -247,6 +247,19 @@ async function runSmokeTest() {
     await new Promise((r) => setTimeout(r, 300));
     report.dialogs.windows = [...panels.keys()].sort();
     // Close only what this check opened; the settings panel is probed further down.
+    if (process.env.TWINLINE_SMOKE_SHOTS) {
+      // Pictures of the real windows, for checking chrome/layout by eye.
+      const dir = process.env.TWINLINE_SMOKE_SHOTS;
+      fs.mkdirSync(dir, { recursive: true });
+      mainWindow.showInactive();
+      for (const [key, w] of [['main', mainWindow], ...panels.entries()]) {
+        if (w.isDestroyed()) continue;
+        if (w !== mainWindow) w.showInactive();
+        await new Promise((r) => setTimeout(r, 400));
+        const img = await w.capturePage();
+        fs.writeFileSync(path.join(dir, `${key.replace(/[^a-z]/gi, '') || 'main'}.png`), img.toPNG());
+      }
+    }
     for (const key of ['history:', 'contacts:']) { const w = panels.get(key); if (w && !w.isDestroyed()) w.close(); }
     if (report.dialogs.visible.length || !['contacts:', 'history:', 'settings:'].every((k) => report.dialogs.windows.includes(k))) {
       problems.push(`dialogs did not open as their own windows: ${JSON.stringify(report.dialogs)}`);
@@ -656,10 +669,23 @@ function openPanel(name, params = {}) {
   if (!PANEL_SIZES[name]) throw new Error(`unknown panel "${name}"`);
   const key = `${name}:${params.call || params.file || ''}`;
   const existing = panels.get(key);
-  if (existing && !existing.isDestroyed()) { existing.focus(); return { focused: true }; }
+  if (existing && !existing.isDestroyed()) {
+    // focus() alone leaves a minimised window minimised (Mike, 1.4.16).
+    if (existing.isMinimized()) existing.restore();
+    existing.show();
+    existing.focus();
+    return { focused: true };
+  }
 
-  const size = PANEL_SIZES[name];
+  // A 620–740 px tall dialog does not fit a small laptop screen at 125–150 %
+  // scaling (work area ~470–610 px): Windows then pushes the window off the
+  // top and its close button is unreachable (Mike, 1.4.16). Fit the screen.
   const anchor = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+  const { workArea } = anchor ? screen.getDisplayMatching(anchor) : screen.getPrimaryDisplay();
+  const size = {
+    width: Math.min(PANEL_SIZES[name].width, workArea.width - 16),
+    height: Math.min(PANEL_SIZES[name].height, workArea.height - 16),
+  };
   const pos = anchor ? centredOver(anchor, size.width, size.height) : {};
   log.info('main', 'panel placed', { name, pos, anchor });
   const win = new BrowserWindow({

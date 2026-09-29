@@ -73,6 +73,9 @@ const DEFAULT_SETTINGS = {
     sipTrace: false,
     // Do not disturb: decline incoming calls as busy. Survives restarts on purpose.
     dnd: false,
+    // Settings / History / Contacts open as their own windows (true) or as
+    // sheets inside the phone window (false).
+    dialogWindows: true,
     // The version whose "What's new" the user dismissed with "don't show again".
     whatsNewSeen: '',
   },
