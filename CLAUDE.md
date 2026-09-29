@@ -159,6 +159,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   a connected call even when focus is in `#dialInput` (it always is after
   dialling); other text fields keep their digits. Mike found ISP IVRs ignored
   typed digits while keypad clicks worked.
+- **In-window dialogs are exclusive** (1.4.14): `showOverlay(id)` hides the
+  other overlays first. They stack by DOM order, so Settings (first in the
+  DOM) opened after Contacts sat underneath it with its ✕ unreachable. The
+  smoke test opens Settings → History → Contacts and checks only Contacts
+  shows and its ✕ is on top.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.

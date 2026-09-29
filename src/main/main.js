@@ -236,6 +236,25 @@ async function runSmokeTest() {
         const el = document.querySelector('#keypad button[data-digit="5"]'); const r = el.getBoundingClientRect();
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el.contains(top) ? 'ok' : (top && (top.id || top.className)); })() };
     })()`);
+    // Dialogs are exclusive: opening Settings, then History, then Contacts
+    // must leave only Contacts showing, with its close button on top.
+    report.dialogs = await mainWindow.webContents.executeJavaScript(`(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      for (const id of ['btnSettings', 'btnHistory', 'btnContacts']) { document.getElementById(id).click(); await wait(250); }
+      const visible = ['settingsOverlay', 'historyOverlay', 'contactsOverlay', 'transcriptOverlay', 'transferOverlay']
+        .filter((id) => !document.getElementById(id).classList.contains('hidden'));
+      const btn = document.getElementById('btnContactsClose');
+      const r = btn.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const closeReachable = top === btn || btn.contains(top);
+      btn.click();
+      await wait(100);
+      const allClosed = !['settingsOverlay', 'historyOverlay', 'contactsOverlay'].some((id) => !document.getElementById(id).classList.contains('hidden'));
+      return { visible, closeReachable, allClosed };
+    })()`);
+    if (report.dialogs.visible.join() !== 'contactsOverlay' || !report.dialogs.closeReachable || !report.dialogs.allClosed) {
+      problems.push(`dialogs are not exclusive or the close button is covered: ${JSON.stringify(report.dialogs)}`);
+    }
     for (const [name, result] of Object.entries(report.hits)) {
       if (result !== 'ok') problems.push(`${name} is covered by ${result}`);
     }

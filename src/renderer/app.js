@@ -289,6 +289,17 @@ function wireEvents() {
   document.addEventListener('keydown', onGlobalKey);
 }
 
+// The in-window dialogs (Settings, History, transcript view, Contacts,
+// Transfer) are stacked by DOM order, so opening a second one over a first
+// could land it *underneath* — Settings, first in the DOM, ended up hidden
+// behind Contacts with its close button unreachable (Mike, 1.4.14). They are
+// exclusive now: opening one closes the rest. Pop-out windows are unaffected.
+const OVERLAYS = ['settingsOverlay', 'historyOverlay', 'transcriptOverlay', 'contactsOverlay', 'transferOverlay'];
+function showOverlay(id) {
+  for (const other of OVERLAYS) if (other !== id) $(other).classList.add('hidden');
+  $(id).classList.remove('hidden');
+}
+
 function onGlobalKey(e) {
   // Typed digits during a live call are DTMF, even when the keyboard focus is
   // still in the dial box (it is, right after dialling): an IVR ("press 2 for
@@ -639,7 +650,7 @@ function openTransfer(callId, { deflect = false } = {}) {
     };
   }
 
-  $('transferOverlay').classList.remove('hidden');
+  showOverlay('transferOverlay');
   $('transferTarget').focus();
 }
 
@@ -687,7 +698,7 @@ async function openHistory() {
     button.onclick = () => openTranscriptFile(button.dataset.tfile);
   }
   renderSavedTranscripts();
-  $('historyOverlay').classList.remove('hidden');
+  showOverlay('historyOverlay');
 }
 
 // ---- settings ---------------------------------------------------------------
@@ -697,7 +708,7 @@ function openSettings() {
   renderSettingsAudio();
   renderSettingsGeneral();
   renderSettingsTranscription();
-  $('settingsOverlay').classList.remove('hidden');
+  showOverlay('settingsOverlay');
 }
 
 function closeSettings() {
@@ -1090,7 +1101,7 @@ async function openTranscriptFile(file) {
   viewedTranscript = record;
   $('transcriptViewTitle').textContent = `Transcript — ${record.remoteName || record.remoteNumber || 'unknown'}`;
   $('transcriptViewText').textContent = record.text;
-  $('transcriptOverlay').classList.remove('hidden');
+  showOverlay('transcriptOverlay');
 }
 
 async function deleteViewedTranscript() {
@@ -1314,7 +1325,7 @@ async function openContacts() {
   contacts = await guard(api.contacts.list()) || [];
   hideContactForm();
   renderContacts();
-  $('contactsOverlay').classList.remove('hidden');
+  showOverlay('contactsOverlay');
   $('contactSearch').focus();
 }
 
