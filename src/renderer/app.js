@@ -716,7 +716,7 @@ async function openHistory() {
         const duration = h.durationMs ? ` · ${Math.round(h.durationMs / 1000)}s` : '';
         return `<li>
           <span class="dir ${cls}" title="${h.dnd ? 'Declined: Do not disturb was on' : ''}">${arrow}</span>
-          <span class="who">${esc(h.contactName || h.remoteName || h.remoteNumber || 'Unknown')}${h.dnd ? ' <span class="pill">DND</span>' : ''}</span>
+          <span class="who"><span class="n">${esc(h.contactName || h.remoteName || h.remoteNumber || 'Unknown')}${h.dnd ? ' <span class="pill">DND</span>' : ''}</span>${(h.contactName || h.remoteName) && h.remoteNumber && h.remoteNumber !== (h.contactName || h.remoteName) ? `<span class="num">${esc(h.remoteNumber)}</span>` : ''}</span>
           <span class="when">${new Date(h.startedAt).toLocaleString()}${duration}</span>
           ${h.transcript ? `<button class="btn ghost small" data-tfile="${esc(h.transcript)}" title="${h.transcriptLines} lines">Transcript</button>` : ''}
           <button class="btn ghost small redial" data-redial="${esc(h.remoteNumber)}">Call</button>
