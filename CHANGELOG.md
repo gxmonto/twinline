@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.17 — 2026-09-29
+
+- Pop-out windows (Settings, History, Contacts, transcripts, Transfer) now have a single header row like the phone window: the dialog title on the left and minimise, maximise and close in the corner. The extra title bar, the duplicate ✕, and the Contacts/History/Settings icons added in 1.4.16 are gone.
+
 ## 1.4.16 — 2026-09-29
 
 - Pop-out windows (Settings, History, Contacts) never open larger than the screen, so the close button always stays reachable on small laptop screens.
