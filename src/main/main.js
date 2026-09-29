@@ -114,6 +114,7 @@ function createWindow() {
   mainWindow.on('maximize', sendWindowState);
   mainWindow.on('unmaximize', sendWindowState);
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  mainWindow.webContents.once('did-finish-load', () => setTimeout(maybeShowWhatsNew, 1200));
 
   mainWindow.once('ready-to-show', () => {
     if (isSmoke) return;
@@ -236,24 +237,19 @@ async function runSmokeTest() {
         const el = document.querySelector('#keypad button[data-digit="5"]'); const r = el.getBoundingClientRect();
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el.contains(top) ? 'ok' : (top && (top.id || top.className)); })() };
     })()`);
-    // Dialogs are exclusive: opening Settings, then History, then Contacts
-    // must leave only Contacts showing, with its close button on top.
+    // The title-bar buttons open Settings, History and Contacts as their own
+    // windows (1.4.15); nothing may appear as an in-window sheet.
     report.dialogs = await mainWindow.webContents.executeJavaScript(`(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      for (const id of ['btnSettings', 'btnHistory', 'btnContacts']) { document.getElementById(id).click(); await wait(250); }
-      const visible = ['settingsOverlay', 'historyOverlay', 'contactsOverlay', 'transcriptOverlay', 'transferOverlay']
-        .filter((id) => !document.getElementById(id).classList.contains('hidden'));
-      const btn = document.getElementById('btnContactsClose');
-      const r = btn.getBoundingClientRect();
-      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      const closeReachable = top === btn || btn.contains(top);
-      btn.click();
-      await wait(100);
-      const allClosed = !['settingsOverlay', 'historyOverlay', 'contactsOverlay'].some((id) => !document.getElementById(id).classList.contains('hidden'));
-      return { visible, closeReachable, allClosed };
+      for (const id of ['btnSettings', 'btnHistory', 'btnContacts']) { document.getElementById(id).click(); await wait(300); }
+      return { visible: ['settingsOverlay', 'historyOverlay', 'contactsOverlay'].filter((id) => !document.getElementById(id).classList.contains('hidden')) };
     })()`);
-    if (report.dialogs.visible.join() !== 'contactsOverlay' || !report.dialogs.closeReachable || !report.dialogs.allClosed) {
-      problems.push(`dialogs are not exclusive or the close button is covered: ${JSON.stringify(report.dialogs)}`);
+    await new Promise((r) => setTimeout(r, 300));
+    report.dialogs.windows = [...panels.keys()].sort();
+    // Close only what this check opened; the settings panel is probed further down.
+    for (const key of ['history:', 'contacts:']) { const w = panels.get(key); if (w && !w.isDestroyed()) w.close(); }
+    if (report.dialogs.visible.length || !['contacts:', 'history:', 'settings:'].every((k) => report.dialogs.windows.includes(k))) {
+      problems.push(`dialogs did not open as their own windows: ${JSON.stringify(report.dialogs)}`);
     }
     for (const [name, result] of Object.entries(report.hits)) {
       if (result !== 'ok') problems.push(`${name} is covered by ${result}`);
@@ -549,14 +545,54 @@ function createTray() {
   if (trayIconLoaded && process.platform !== 'win32') icon = icon.resize({ width: 22, height: 22 });
   tray = new Tray(icon);
   tray.setToolTip('TwinLine');
+  refreshTrayMenu();
+  tray.on('click', focusWindow);
+}
+
+/** The tray menu carries the DND state, so it is rebuilt whenever that changes. */
+function refreshTrayMenu() {
+  if (!tray) return;
+  const dnd = !!(manager && manager.dnd);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show TwinLine', click: focusWindow },
     { type: 'separator' },
+    { label: 'Do not disturb', type: 'checkbox', checked: dnd, click: (item) => setDnd(item.checked) },
     { label: 'Hang up all calls', click: () => manager && manager.hangupAll().catch(() => {}) },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));
-  tray.on('click', focusWindow);
+  tray.setToolTip(dnd ? 'TwinLine — Do not disturb' : 'TwinLine');
+}
+
+/** Turn do-not-disturb on or off everywhere: call manager, settings, tray, windows. */
+function setDnd(on) {
+  const snapshot = manager.setDnd(on);
+  settings.data.behaviour.dnd = !!on;
+  settings.save();
+  refreshTrayMenu();
+  send('state', snapshot);
+  return snapshot;
+}
+
+// ---- what's new ------------------------------------------------------------
+
+/** Release notes bundled at release time (tools/release.js writes the file). */
+function readWhatsNew() {
+  try {
+    const wn = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'assets', 'whats-new.json'), 'utf8'));
+    return wn && typeof wn.version === 'string' && typeof wn.notes === 'string' ? wn : null;
+  } catch {
+    return null;
+  }
+}
+
+/** After an update, show this version's notes once — until "don't show again". */
+function maybeShowWhatsNew() {
+  if (isSmoke) return;
+  const wn = readWhatsNew();
+  if (!wn || wn.version !== app.getVersion()) return;
+  if (settings.data.behaviour.whatsNewSeen === wn.version) return;
+  sendTo(mainWindow, 'whatsnew', wn);
 }
 
 /**
@@ -573,6 +609,11 @@ function send(channel, payload) {
 /** The 50 Hz speaker stream only ever plays in the main window. */
 function sendAudio(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+/** Send to one window only (the what's-new dialog belongs to the phone window). */
+function sendTo(win, channel, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
 // ---- popped-out panels -----------------------------------------------------
@@ -759,6 +800,7 @@ async function bootstrap() {
   manager.on('message', (info) => send('message', info));
 
   await manager.applyAccounts(settings.data.accounts);
+  manager.setDnd(!!settings.data.behaviour.dnd);
 
   // Coming back from sleep or a locked screen is the classic moment the
   // network has changed underneath us: re-register straight away rather than
@@ -957,6 +999,13 @@ function registerIpc() {
   handle('conf:end', () => manager.endConference());
 
   handle('audio:mute', ({ muted }) => manager.setMuted(muted));
+  handle('dnd:set', ({ on }) => setDnd(!!on));
+  handle('whatsnew:get', () => readWhatsNew());
+  handle('whatsnew:dismiss', ({ version }) => {
+    settings.data.behaviour.whatsNewSeen = String(version || '');
+    settings.save();
+    return { ok: true };
+  });
   handle('audio:speakerGain', ({ gain }) => manager.setSpeakerGain(gain));
   handle('audio:micGain', ({ gain }) => manager.setMicGain(gain));
 

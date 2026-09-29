@@ -71,6 +71,10 @@ const DEFAULT_SETTINGS = {
     popupPosition: null,
     // Record every SIP message in the log file (troubleshooting only).
     sipTrace: false,
+    // Do not disturb: decline incoming calls as busy. Survives restarts on purpose.
+    dnd: false,
+    // The version whose "What's new" the user dismissed with "don't show again".
+    whatsNewSeen: '',
   },
   updates: {
     mode: 'ask',           // ask | auto | off

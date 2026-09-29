@@ -81,7 +81,12 @@ fs.writeFileSync(changelogPath, `# Changelog\n\n## ${next} — ${date}\n\n${note
 // The notes file stays as-is for this release (release.yml reads it for the
 // GitHub Release text) and is reset in a follow-up commit below.
 
-run('git add package.json package-lock.json CHANGELOG.md release-notes.md');
+// The app shows these notes once after the update ("What's new"); bundle
+// them with the build so the dialog needs no network.
+const whatsNewPath = path.join(root, 'src', 'assets', 'whats-new.json');
+fs.writeFileSync(whatsNewPath, JSON.stringify({ version: next, date, notes: notesBody }, null, 2) + '\n');
+
+run('git add package.json package-lock.json CHANGELOG.md release-notes.md src/assets/whats-new.json');
 run(`git commit -q -m "Release ${tag}"`);
 run(`git tag -a ${tag} -m "TwinLine ${next}"`);
 

@@ -88,6 +88,7 @@
 
     <div class="dial-tools">
       <button class="btn ghost small" id="btnMute">Mute</button>
+      <button class="btn ghost small" id="btnDnd" title="Do not disturb: decline incoming calls as busy">DND</button>
       <button class="btn ghost small" id="btnKeypad">Hide keypad</button>
       <div class="meter" title="Microphone level"><div class="meter-fill" id="micMeter"></div></div>
     </div>
@@ -228,6 +229,7 @@
           <p class="hint" id="updateStatus"></p>
           <p class="hint" id="encryptionHint"></p>
           <p class="hint" id="versionHint"></p>
+          <span class="row"><button type="button" class="btn small" id="btnWhatsNew">What's new in this version</button></span>
         </div>
       </div>
       <div class="sheet-foot">
@@ -304,6 +306,20 @@
           <button class="btn ghost small" data-export="json">JSON</button>
           <button class="btn ghost small" data-export="vcf">vCard</button>
         </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- What's new (shown once after an update) -->
+  <div class="overlay hidden" id="whatsNewOverlay">
+    <div class="sheet small whats-new">
+      <div class="sheet-head">
+        <h2 id="whatsNewTitle">What's new</h2>
+        <span class="head-actions"><button class="icon-btn" id="btnWhatsNewClose" aria-label="Close">&#10005;</button></span>
+      </div>
+      <div class="sheet-body" id="whatsNewBody"></div>
+      <div class="sheet-foot">
+        <button class="btn ghost small" id="btnWhatsNewSkip">Don't show again for this version</button>
       </div>
     </div>
   </div>

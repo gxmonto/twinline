@@ -168,6 +168,7 @@ function wireEvents() {
     updateRingtone();
     // A call that never connected and was refused gets the busy signal;
     // everything else gets the short "ended" cue.
+    if (info.dnd) { toast(`Declined (Do not disturb): ${info.remoteNumber || 'unknown caller'}`); return; }
     if (['busy', 'declined', 'notfound', 'rejected'].includes(info.reason)) audio.playCue('busy');
     else if (info.reason !== 'rejected-local' && info.reason !== 'cancelled') audio.playCue('ended');
     if (info.reason && !['local', 'remote'].includes(info.reason)) {
@@ -261,6 +262,14 @@ function wireEvents() {
     if (e.key === 'Enter') dial();
   });
   $('btnMute').onclick = toggleMute;
+  $('btnDnd').onclick = toggleDnd;
+  $('btnWhatsNew').onclick = async () => { const wn = await guard(api.whatsNew.get()); if (wn) showWhatsNew(wn, { manual: true }); else toast('No release notes are bundled with this build'); };
+  $('btnWhatsNewClose').onclick = () => $('whatsNewOverlay').classList.add('hidden');
+  $('btnWhatsNewSkip').onclick = async () => {
+    await guard(api.whatsNew.dismiss($('whatsNewOverlay').dataset.version));
+    $('whatsNewOverlay').classList.add('hidden');
+  };
+  api.on.whatsNew((wn) => { if (!PANEL) showWhatsNew(wn); });
   $('btnKeypad').onclick = toggleKeypad;
   $('keypad').addEventListener('click', (e) => {
     const button = e.target.closest('button[data-digit]');
@@ -294,7 +303,7 @@ function wireEvents() {
 // could land it *underneath* — Settings, first in the DOM, ended up hidden
 // behind Contacts with its close button unreachable (Mike, 1.4.14). They are
 // exclusive now: opening one closes the rest. Pop-out windows are unaffected.
-const OVERLAYS = ['settingsOverlay', 'historyOverlay', 'transcriptOverlay', 'contactsOverlay', 'transferOverlay'];
+const OVERLAYS = ['settingsOverlay', 'historyOverlay', 'transcriptOverlay', 'contactsOverlay', 'transferOverlay', 'whatsNewOverlay'];
 function showOverlay(id) {
   for (const other of OVERLAYS) if (other !== id) $(other).classList.add('hidden');
   $(id).classList.remove('hidden');
@@ -339,6 +348,28 @@ function renderAll() {
   renderConference();
   $('btnMute').classList.toggle('active', !!state.muted);
   $('btnMute').textContent = state.muted ? 'Unmute' : 'Mute';
+  $('btnDnd').classList.toggle('active', !!state.dnd);
+  $('btnDnd').title = state.dnd ? 'Do not disturb is on: incoming calls are declined as busy' : 'Do not disturb: decline incoming calls as busy';
+}
+
+async function toggleDnd() {
+  const snapshot = await guard(api.dnd.set(!state.dnd));
+  if (snapshot) {
+    state = snapshot;
+    renderAll();
+    toast(state.dnd ? 'Do not disturb on: incoming calls will be declined' : 'Do not disturb off');
+  }
+}
+
+/** The release notes for the running version, shown once after an update. */
+function showWhatsNew(wn, { manual = false } = {}) {
+  const lines = String(wn.notes || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const items = lines.map((l) => (/^[-*] /.test(l) ? `<li>${esc(l.slice(2))}</li>` : `<p>${esc(l)}</p>`)).join('');
+  $('whatsNewTitle').textContent = `What's new in TwinLine ${wn.version}`;
+  $('whatsNewBody').innerHTML = items ? `<ul>${items}</ul>` : '<p>No notes for this version.</p>';
+  $('whatsNewOverlay').dataset.version = wn.version || '';
+  $('btnWhatsNewSkip').classList.toggle('hidden', manual);
+  showOverlay('whatsNewOverlay');
 }
 
 function renderLines() {
@@ -671,6 +702,9 @@ async function doTransfer() {
 // ---- history ----------------------------------------------------------------
 
 async function openHistory() {
+  // In the phone window the dialogs open as their own windows (1.4.15): the
+  // in-window sheets clipped their close button at the minimum window size.
+  if (!PANEL) return guard(api.window.openPanel('history'));
   const history = await api.state.history();
   $('historyList').innerHTML = history.length
     ? history.map((h) => {
@@ -678,8 +712,8 @@ async function openHistory() {
         const arrow = h.missed ? '&#10007;' : h.direction === 'out' ? '&#8599;' : '&#8600;';
         const duration = h.durationMs ? ` · ${Math.round(h.durationMs / 1000)}s` : '';
         return `<li>
-          <span class="dir ${cls}">${arrow}</span>
-          <span class="who">${esc(h.contactName || h.remoteName || h.remoteNumber || 'Unknown')}</span>
+          <span class="dir ${cls}" title="${h.dnd ? 'Declined: Do not disturb was on' : ''}">${arrow}</span>
+          <span class="who">${esc(h.contactName || h.remoteName || h.remoteNumber || 'Unknown')}${h.dnd ? ' <span class="pill">DND</span>' : ''}</span>
           <span class="when">${new Date(h.startedAt).toLocaleString()}${duration}</span>
           ${h.transcript ? `<button class="btn ghost small" data-tfile="${esc(h.transcript)}" title="${h.transcriptLines} lines">Transcript</button>` : ''}
           <button class="btn ghost small redial" data-redial="${esc(h.remoteNumber)}">Call</button>
@@ -704,6 +738,7 @@ async function openHistory() {
 // ---- settings ---------------------------------------------------------------
 
 function openSettings() {
+  if (!PANEL) return guard(api.window.openPanel('settings'));
   renderSettingsAccounts();
   renderSettingsAudio();
   renderSettingsGeneral();
@@ -1322,6 +1357,7 @@ let contacts = [];
 let editingContactId = null;
 
 async function openContacts() {
+  if (!PANEL) return guard(api.window.openPanel('contacts'));
   contacts = await guard(api.contacts.list()) || [];
   hideContactForm();
   renderContacts();

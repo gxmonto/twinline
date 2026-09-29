@@ -460,7 +460,7 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
   /* Percentages do not resolve inside an auto-sized grid row, so size the
      sheet against the viewport; min-height:0 lets the body actually shrink
      and scroll instead of pushing the footer off screen. */
-  max-height: calc(100vh - 28px);
+  max-height: calc(100vh - 70px);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -684,3 +684,8 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 ::-webkit-scrollbar { width: 9px; }
 ::-webkit-scrollbar-thumb { background: #2a3140; border-radius: 5px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+#btnDnd.active { background: var(--red); border-color: var(--red); color: #fff; }
+.whats-new .sheet-body ul { margin: 0; padding-left: 18px; }
+.whats-new .sheet-body li { margin: 6px 0; line-height: 1.4; }
+.whats-new .sheet-body p { margin: 6px 0; }

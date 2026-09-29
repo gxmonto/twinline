@@ -57,6 +57,7 @@ class CallManager extends EventEmitter {
     this.conferenceIds = new Set();
     this.history = this._loadHistory();
     this.muted = false;
+    this.dnd = false;                         // decline incoming calls as busy
 
     this.audio.on('dtmf', (callId, digit) => this.emit('dtmf', { callId, digit }));
     this.audio.on('levels', (levels) => this.emit('levels', levels));
@@ -159,6 +160,14 @@ class CallManager extends EventEmitter {
     call.on('update', () => this._emitCalls());
     call.on('state', (state) => {
       this.emit('callState', { callId: call.id, state });
+      if (state === 'incoming' && this.dnd) {
+        // Do not disturb: 486 lets the PBX route to voicemail / the next
+        // phone, exactly as a busy handset would. Nothing rings here.
+        log.info('declined by do-not-disturb', { callId: call.id, from: call.remoteNumber });
+        call.dndRejected = true;
+        call.reject(486, 'Busy Here');
+        return;
+      }
       if (state === 'incoming') this.emit('incoming', this._describe(call));
       if (state === 'connected' && this.transcription && this.transcription.settings.autoStart) {
         this.startTranscription(call.id).catch((err) => this.emit('warning', { callId: call.id, message: err.message }));
@@ -176,7 +185,7 @@ class CallManager extends EventEmitter {
         this.transcription.stop(call.id, { reason: 'call ended' }).catch((err) => log.error('transcript stop failed', err));
       }
       this._emitCalls();
-      this.emit('callEnded', { callId: call.id, remoteNumber: call.remoteNumber, ...info });
+      this.emit('callEnded', { callId: call.id, remoteNumber: call.remoteNumber, dnd: !!call.dndRejected, ...info });
     });
 
     this._emitCalls();
@@ -195,6 +204,7 @@ class CallManager extends EventEmitter {
       endedAt: call.endedAt,
       durationMs: call.answeredAt ? (call.endedAt - call.answeredAt) : 0,
       missed: call.direction === 'in' && !call.answeredAt,
+      dnd: !!call.dndRejected,
       reason: info.reason,
       status: info.status,
     });
@@ -565,12 +575,20 @@ class CallManager extends EventEmitter {
     return { ok: true };
   }
 
+  setDnd(on) {
+    this.dnd = !!on;
+    log.info(`do-not-disturb ${this.dnd ? 'on' : 'off'}`);
+    this._emitCalls();
+    return this.snapshot();
+  }
+
   snapshot() {
     return {
       calls: this.activeCalls().map((c) => this._describe(c)),
       conference: [...this.conferenceIds],
       conferenceRunning: this.conferenceRunning,
       muted: this.muted,
+      dnd: this.dnd,
       accounts: [...this.accounts.values()].map((ua) => ua.status()),
       transcription: this.transcription ? this.transcription.status() : null,
     };
