@@ -547,7 +547,10 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 .history .dir.missed { color: var(--red); }
 .history .dir.out { color: var(--accent); }
 .history .dir.in { color: var(--green); }
-.history .who { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history .who { flex: 1 1 auto; min-width: 0; }
+.history .who .n { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The number under a name (a PBX label like "ISP Visit - TOLL FREE CALL" hides who it was). */
+.history .who .num { display: block; font-size: 11.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history .when { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .history .redial { opacity: 0; }
 .history li:hover .redial { opacity: 1; }

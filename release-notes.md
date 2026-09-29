@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Call history shows the caller's number under the name, so an entry labelled by the PBX (like "ISP Visit - TOLL FREE CALL") still tells you who it was.
