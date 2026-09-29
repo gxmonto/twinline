@@ -1,1 +1,1 @@
-- Settings, History, Contacts, Transfer and the transcript view no longer stack on top of each other inside the window. Opening one closes the others, so a dialog can no longer end up hidden behind another with its close button out of reach.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
