@@ -618,10 +618,28 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 .panel-mode .dialer,
 .panel-mode #updateBanner,
 .panel-mode .lines,
+.panel-mode #btnContacts,
+.panel-mode #btnHistory,
+.panel-mode #btnSettings,
 .panel-mode .icon-btn.popout,
 .panel-mode .toast-stack { display: none; }
-/* The Contacts / History / Settings icons stay in a pop-out window's corner,
-   like the phone window's, so any dialog can be reached from any window. */
+
+/* A pop-out dialog has ONE header row, like the phone window (Mike, 1.4.17):
+   the dialog's own header becomes the title bar — 42 px, draggable, keeping
+   clear of the OS caption buttons — and the phone's title bar plus the
+   dialog's own ✕ / pop-out buttons go. The transcript panel has no sheet, so
+   it keeps the ordinary title bar. */
+.panel-mode:not(.panel-transcript) .titlebar { display: none; }
+.panel-mode .sheet-head {
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  width: env(titlebar-area-width, 100%);
+  background: var(--bg-raised);
+  -webkit-app-region: drag;
+}
+.panel-mode .sheet-head h2, .panel-mode .sheet-head .pill { -webkit-app-region: no-drag; }
+.panel-mode .sheet-head .head-actions { display: none; }
 
 .panel-mode #main { display: none; }
 .panel-mode.panel-transcript #main { display: flex; flex-direction: column; padding: 8px; }
