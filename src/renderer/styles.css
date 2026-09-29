@@ -618,11 +618,10 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 .panel-mode .dialer,
 .panel-mode #updateBanner,
 .panel-mode .lines,
-.panel-mode #btnContacts,
-.panel-mode #btnHistory,
-.panel-mode #btnSettings,
 .panel-mode .icon-btn.popout,
 .panel-mode .toast-stack { display: none; }
+/* The Contacts / History / Settings icons stay in a pop-out window's corner,
+   like the phone window's, so any dialog can be reached from any window. */
 
 .panel-mode #main { display: none; }
 .panel-mode.panel-transcript #main { display: flex; flex-direction: column; padding: 8px; }

@@ -163,6 +163,14 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `openSettings/openHistory/openContacts` call `api.window.openPanel(...)`
   (Mike: the History sheet clipped its ✕ at the minimum window size). The
   in-window sheets still serve the panel windows, Transfer and What's new.
+- **Panel windows fit the screen** (1.4.16): `openPanel` caps width/height
+  to the phone's work area minus 16 px (a 740 px Settings window did not fit
+  a scaled laptop screen and Windows pushed its top, and the ✕, off-screen).
+  `behaviour.dialogWindows` (default true) lets Mike fall back to in-window
+  sheets. A minimised panel is restored+shown on re-open (focus() alone did
+  nothing). Panel windows keep the ♟ ⏱ ⚙ corner icons (they open the other
+  dialogs' windows) — Mike asked for "the icons in the corner like the main
+  app"; if that reading was wrong, the CSS rule in `.panel-mode` is the place.
 - **DND** (1.4.15): `manager.dnd` → an incoming INVITE is answered 486 before
   anything rings; `call.dndRejected` marks history (`dnd: true`) and the
   callEnded event. Persisted in `behaviour.dnd`; tray menu checkbox; main.js

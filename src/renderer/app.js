@@ -198,9 +198,10 @@ function wireEvents() {
     $('btnMaximise').innerHTML = maximized ? '&#10697;' : '&#9633;';
     $('btnMaximise').title = maximized ? 'Restore' : 'Maximise';
   });
-  $('btnSettings').onclick = openSettings;
-  $('btnHistory').onclick = openHistory;
-  $('btnContacts').onclick = openContacts;
+  // In a pop-out window these icons open (or bring forward) that dialog's own window.
+  $('btnSettings').onclick = () => (PANEL ? guard(api.window.openPanel('settings')) : openSettings());
+  $('btnHistory').onclick = () => (PANEL ? guard(api.window.openPanel('history')) : openHistory());
+  $('btnContacts').onclick = () => (PANEL ? guard(api.window.openPanel('contacts')) : openContacts());
   $('btnContactsClose').onclick = () => $('contactsOverlay').classList.add('hidden');
   $('btnContactNew').onclick = () => editContact(null);
   $('btnContactCancel').onclick = hideContactForm;
@@ -303,6 +304,9 @@ function wireEvents() {
 // could land it *underneath* — Settings, first in the DOM, ended up hidden
 // behind Contacts with its close button unreachable (Mike, 1.4.14). They are
 // exclusive now: opening one closes the rest. Pop-out windows are unaffected.
+/** Settings → Behaviour: dialogs as their own windows (default) or in-window sheets. */
+const dialogsAsWindows = () => !settings || !settings.behaviour || settings.behaviour.dialogWindows !== false;
+
 const OVERLAYS = ['settingsOverlay', 'historyOverlay', 'transcriptOverlay', 'contactsOverlay', 'transferOverlay', 'whatsNewOverlay'];
 function showOverlay(id) {
   for (const other of OVERLAYS) if (other !== id) $(other).classList.add('hidden');
@@ -704,7 +708,7 @@ async function doTransfer() {
 async function openHistory() {
   // In the phone window the dialogs open as their own windows (1.4.15): the
   // in-window sheets clipped their close button at the minimum window size.
-  if (!PANEL) return guard(api.window.openPanel('history'));
+  if (!PANEL && dialogsAsWindows()) return guard(api.window.openPanel('history'));
   const history = await api.state.history();
   $('historyList').innerHTML = history.length
     ? history.map((h) => {
@@ -738,7 +742,7 @@ async function openHistory() {
 // ---- settings ---------------------------------------------------------------
 
 function openSettings() {
-  if (!PANEL) return guard(api.window.openPanel('settings'));
+  if (!PANEL && dialogsAsWindows()) return guard(api.window.openPanel('settings'));
   renderSettingsAccounts();
   renderSettingsAudio();
   renderSettingsGeneral();
@@ -871,6 +875,7 @@ function renderSettingsGeneral() {
   $('minimiseToTray').checked = settings.behaviour.minimiseToTray;
   $('startMinimised').checked = settings.behaviour.startMinimised;
   $('incomingPopup').checked = settings.behaviour.incomingPopup !== false;
+  $('dialogWindows').checked = settings.behaviour.dialogWindows !== false;
   $('sipTrace').checked = !!settings.behaviour.sipTrace;
   $('updateMode').value = (settings.updates && settings.updates.mode) || 'ask';
   $('updateUrl').value = (settings.updates && settings.updates.url) || '';
@@ -937,6 +942,7 @@ async function saveSettings() {
   next.behaviour.minimiseToTray = $('minimiseToTray').checked;
   next.behaviour.startMinimised = $('startMinimised').checked;
   next.behaviour.incomingPopup = $('incomingPopup').checked;
+  next.behaviour.dialogWindows = $('dialogWindows').checked;
   next.behaviour.sipTrace = $('sipTrace').checked;
   next.updates = { mode: $('updateMode').value, url: $('updateUrl').value.trim() };
   next.transcription = {
@@ -1357,7 +1363,7 @@ let contacts = [];
 let editingContactId = null;
 
 async function openContacts() {
-  if (!PANEL) return guard(api.window.openPanel('contacts'));
+  if (!PANEL && dialogsAsWindows()) return guard(api.window.openPanel('contacts'));
   contacts = await guard(api.contacts.list()) || [];
   hideContactForm();
   renderContacts();
