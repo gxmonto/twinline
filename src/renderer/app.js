@@ -198,10 +198,9 @@ function wireEvents() {
     $('btnMaximise').innerHTML = maximized ? '&#10697;' : '&#9633;';
     $('btnMaximise').title = maximized ? 'Restore' : 'Maximise';
   });
-  // In a pop-out window these icons open (or bring forward) that dialog's own window.
-  $('btnSettings').onclick = () => (PANEL ? guard(api.window.openPanel('settings')) : openSettings());
-  $('btnHistory').onclick = () => (PANEL ? guard(api.window.openPanel('history')) : openHistory());
-  $('btnContacts').onclick = () => (PANEL ? guard(api.window.openPanel('contacts')) : openContacts());
+  $('btnSettings').onclick = openSettings;
+  $('btnHistory').onclick = openHistory;
+  $('btnContacts').onclick = openContacts;
   $('btnContactsClose').onclick = () => $('contactsOverlay').classList.add('hidden');
   $('btnContactNew').onclick = () => editContact(null);
   $('btnContactCancel').onclick = hideContactForm;

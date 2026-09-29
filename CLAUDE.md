@@ -168,9 +168,14 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   a scaled laptop screen and Windows pushed its top, and the ✕, off-screen).
   `behaviour.dialogWindows` (default true) lets Mike fall back to in-window
   sheets. A minimised panel is restored+shown on re-open (focus() alone did
-  nothing). Panel windows keep the ♟ ⏱ ⚙ corner icons (they open the other
-  dialogs' windows) — Mike asked for "the icons in the corner like the main
-  app"; if that reading was wrong, the CSS rule in `.panel-mode` is the place.
+  nothing).
+- **Pop-out header** (1.4.17): one row, like the phone window. In
+  `.panel-mode` (not the transcript panel) the `.titlebar` is hidden and the
+  dialog's `.sheet-head` *is* the title bar: 42 px, `-webkit-app-region:
+  drag`, width `env(titlebar-area-width)`, no `.head-actions` (the OS ✕
+  closes the window). 1.4.16 misread Mike's "icons in the corner like the
+  main app" as the ♟ ⏱ ⚙ icons; he meant the min/max/close position. When a
+  request names "icons", ask for a screenshot before redesigning.
 - **DND** (1.4.15): `manager.dnd` → an incoming INVITE is answered 486 before
   anything rings; `call.dndRejected` marks history (`dnd: true`) and the
   callEnded event. Persisted in `behaviour.dnd`; tray menu checkbox; main.js
