@@ -473,6 +473,9 @@ class TranscriptionService extends EventEmitter {
       parties: [...parties.values()].map((p) => p.label),
       voiceCounts: { ...record.voiceCounts },
       file: record.file ? path.basename(record.file) : null,
+      // Every call this transcript covers (a conference transcript covers
+      // several), so each of their history entries can link to it.
+      callIds: [...new Set([record.callId, ...Object.keys(record.partyLabels)])],
     };
   }
 

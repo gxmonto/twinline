@@ -1,1 +1,2 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- History: the Transcript button works again from the History window; the transcript opens in its own window.
+- A conference transcript is now linked from every call it covers, not only the first one, and a transcript stopped before the call ends is still attached to that call's history entry.
