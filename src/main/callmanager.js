@@ -42,9 +42,20 @@ class CallManager extends EventEmitter {
           .map((c) => ({ callId: c.id, label: this._contactName(c.remoteNumber) || c.remoteDisplayName || c.remoteNumber || 'Caller' }));
       };
       transcription.on('finished', (t) => {
-        // Attach the saved transcript to the matching history entry.
-        const entry = this.history.find((h) => h.id === t.callId);
-        if (entry) { entry.transcript = t.file; entry.transcriptLines = t.lines.length; this._historyChanged(); }
+        // Attach the saved transcript to every call it covers. A conference
+        // transcript covers all members, not just the call it started on
+        // (Mike: "some calls are not getting a transcript"); and a transcript
+        // stopped before the call ends has no history entry yet, so it is
+        // parked until _recordHistory writes one.
+        if (!t.file) { this._emitCalls(); return; }
+        const link = { transcript: t.file, transcriptLines: Array.isArray(t.lines) ? t.lines.length : (t.lines || 0) };
+        let changed = false;
+        for (const id of t.callIds || [t.callId]) {
+          const entry = this.history.find((h) => h.id === id);
+          if (entry) { Object.assign(entry, link); changed = true; }
+          else this._pendingTranscripts.set(id, link);
+        }
+        if (changed) this._historyChanged();
         this._emitCalls();
       });
       transcription.on('started', () => this._emitCalls());
@@ -56,6 +67,8 @@ class CallManager extends EventEmitter {
     /** @type {Set<string>} */
     this.conferenceIds = new Set();
     this.history = this._loadHistory();
+    /** @type {Map<string, {transcript: string, transcriptLines: number}>} transcripts finished before their call ended */
+    this._pendingTranscripts = new Map();
     this.muted = false;
     this.dnd = false;                         // decline incoming calls as busy
 
@@ -205,9 +218,11 @@ class CallManager extends EventEmitter {
       durationMs: call.answeredAt ? (call.endedAt - call.answeredAt) : 0,
       missed: call.direction === 'in' && !call.answeredAt,
       dnd: !!call.dndRejected,
+      ...(this._pendingTranscripts.get(call.id) || {}),
       reason: info.reason,
       status: info.status,
     });
+    this._pendingTranscripts.delete(call.id);
     if (this.history.length > MAX_HISTORY) this.history.length = MAX_HISTORY;
     this._historyChanged();
   }

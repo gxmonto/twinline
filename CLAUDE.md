@@ -193,7 +193,14 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.
 - **Call history** persists in `<userData>/history.json` (CallManager
-  `historyFile`, atomic write on every change, last 300 calls).
+  `historyFile`, atomic write on every change, last 300 calls). A finished
+  transcript carries `callIds` (record + every `partyLabels` key) and is
+  linked to each of those entries; one finished before its call ends is
+  parked in `_pendingTranscripts` until `_recordHistory` (1.4.19).
+- **Transcript from a pop-out** (1.4.19): `openTranscriptFile` opens the
+  `transcriptView` panel window from any panel or from the phone window with
+  dialogs-as-windows on. Showing it as a sheet inside the History panel hid
+  the History sheet (exclusive overlays) and the panel closed itself.
 - **Call waiting**: an incoming call during a live call plays a soft beep
   (`waiting` pattern), not the ringtone; tones share the call's AudioContext
   when the ringtone device is the speaker device, so Windows communications

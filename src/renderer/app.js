@@ -1136,6 +1136,13 @@ function copyTranscript(record) {
 }
 
 async function openTranscriptFile(file) {
+  // From the History window (or the phone window with dialogs-as-windows
+  // on) a transcript opens in its own window. Showing it as a sheet here
+  // would hide the History sheet, and a pop-out closes itself when its
+  // sheet hides — so the button looked dead (Mike, 1.4.19).
+  if ((PANEL && PANEL !== 'transcriptView') || (!PANEL && dialogsAsWindows())) {
+    return guard(api.window.openPanel('transcriptView', { file }));
+  }
   const record = await guard(api.transcribe.read(file));
   if (!record) return;
   viewedTranscript = record;
