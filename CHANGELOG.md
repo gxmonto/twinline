@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.19 — 2026-09-30
+
+- History: the Transcript button works again from the History window; the transcript opens in its own window.
+- A conference transcript is now linked from every call it covers, not only the first one, and a transcript stopped before the call ends is still attached to that call's history entry.
+
 ## 1.4.18 — 2026-09-29
 
 - Call history shows the caller's number under the name, so an entry labelled by the PBX (like "ISP Visit - TOLL FREE CALL") still tells you who it was.
