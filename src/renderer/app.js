@@ -875,6 +875,7 @@ function renderSettingsGeneral() {
   $('startMinimised').checked = settings.behaviour.startMinimised;
   $('incomingPopup').checked = settings.behaviour.incomingPopup !== false;
   $('dialogWindows').checked = settings.behaviour.dialogWindows !== false;
+  $('hardwareAcceleration').checked = !!settings.behaviour.hardwareAcceleration;
   $('sipTrace').checked = !!settings.behaviour.sipTrace;
   $('updateMode').value = (settings.updates && settings.updates.mode) || 'ask';
   $('updateUrl').value = (settings.updates && settings.updates.url) || '';
@@ -942,6 +943,7 @@ async function saveSettings() {
   next.behaviour.startMinimised = $('startMinimised').checked;
   next.behaviour.incomingPopup = $('incomingPopup').checked;
   next.behaviour.dialogWindows = $('dialogWindows').checked;
+  next.behaviour.hardwareAcceleration = $('hardwareAcceleration').checked;
   next.behaviour.sipTrace = $('sipTrace').checked;
   next.updates = { mode: $('updateMode').value, url: $('updateUrl').value.trim() };
   next.transcription = {

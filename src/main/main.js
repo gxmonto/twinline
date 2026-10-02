@@ -68,6 +68,10 @@ let quitting = false;
 // The self-check runs against a throwaway profile so it neither fights the
 // running app for the single-instance lock nor touches real settings.
 if (isSmoke) app.setPath('userData', path.join(app.getPath('temp'), 'twinline-smoke'));
+// --user-data=<dir>: run against a separate profile (measuring, trying
+// settings) without touching the real one or registering its lines.
+const userDataArg = process.argv.find((a) => a.startsWith('--user-data='));
+if (userDataArg && !isSmoke) app.setPath('userData', path.resolve(userDataArg.slice('--user-data='.length)));
 
 // A second launch (or a sip:/tel: link) focuses the running instance.
 if (!app.requestSingleInstanceLock()) {
@@ -1068,6 +1072,21 @@ function registerIpc() {
 }
 
 // ---- lifecycle -------------------------------------------------------------
+
+// GPU acceleration costs ~100 MB (the GPU process) for a UI that is text,
+// buttons and one level meter; software compositing renders it just as well.
+// Off unless the user turns it on in Settings → General (restart needed).
+// Must be decided before 'ready', so settings.json is peeked at directly.
+(function decideHardwareAcceleration() {
+  let on = false;
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8'));
+    on = !!(raw && raw.behaviour && raw.behaviour.hardwareAcceleration);
+  } catch { /* first run, or unreadable: default applies */ }
+  if (process.env.TWINLINE_HWACCEL === '1') on = true;
+  if (process.env.TWINLINE_HWACCEL === '0') on = false;
+  if (!on) app.disableHardwareAcceleration();
+})();
 
 app.whenReady().then(async () => {
   registerIpc();
