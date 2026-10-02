@@ -1,5 +1,5 @@
 {
-  "version": "1.4.20",
+  "version": "1.4.21",
   "date": "2026-10-02",
-  "notes": "- Updates install silently: no installer wizard any more. Press \"Restart now\" on the banner (or quit) and TwinLine comes back on the new version.\n- Unattended option: in Settings → Updates choose \"Unattended\" and TwinLine downloads the update and restarts by itself when no call is active, after a 30-second warning you can postpone.\n- Prepares the version renumbering: the next release will be TwinLine 1.0.0."
+  "notes": "- Lower memory use: the interface no longer uses GPU acceleration by default (about 60 MB less), and the speech engine is unloaded three minutes after the last transcript instead of ten, freeing the ~1 GB its models occupy. Settings → General has a switch to turn GPU acceleration back on."
 }
