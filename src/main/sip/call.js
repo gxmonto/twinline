@@ -18,6 +18,8 @@ const { newBranch, buildAck } = require('./transaction');
 const { CODECS, preferenceList } = require('../rtp/codecs');
 
 const TELEPHONE_EVENT_PT = 101;
+/** Longest a call may ring, either way, before we end it ourselves (3 min). */
+const RING_TIMEOUT_MS = 3 * 60 * 1000;
 
 function newTag() {
   return crypto.randomBytes(6).toString('hex');
@@ -72,6 +74,7 @@ class Call extends EventEmitter {
     this._okRetransmit = null;
     this._okTimer = null;
     this._reinviteRetry = null;
+    this._ringTimer = null;
     this._cancelRequested = false;
     this._terminating = false;
 
@@ -501,6 +504,11 @@ class Call extends EventEmitter {
 
     if (response.status === 180 || response.status === 183) {
       this._setState('ringing');
+      this._startRingTimer(() => {
+        if (this.state !== 'ringing' && this.state !== 'calling') return;
+        this.ua.log.warn('outgoing call not answered in time; cancelling', { call: this.id.slice(0, 8) });
+        this.hangup('No answer').catch(() => {});
+      });
     }
     // Early media: a provisional carrying SDP means audio before answer.
     if (response.body && P.getHeader(response, 'content-type') === 'application/sdp') {
@@ -635,7 +643,21 @@ class Call extends EventEmitter {
     this.serverTxn = txn;
     this.pendingServerInvite = request;
 
+    // Register *before* anything asynchronous. Binding the RTP socket takes a
+    // moment, and a CANCEL that arrived in that moment found no dialog, got
+    // 481, and the INVITE then rang for ever — Mike's "calls get stuck when
+    // not answered" (1.4.22). 100 Trying also stops INVITE retransmissions.
+    this.ua.registerDialog(this);
+    txn.respond(this.ua.makeDialogResponse(request, 100, this));
+
     await this._ensureMedia();
+    if (this.state === 'terminated') {
+      // Cancelled while the socket was being bound: the leg created just now
+      // belongs to nobody.
+      this.ua.audio.releaseLeg(this.id);
+      this.rtp = null;
+      return;
+    }
 
     const contentType = (P.getHeader(request, 'content-type') || '').toLowerCase();
     if (request.body && contentType.includes('application/sdp')) {
@@ -647,17 +669,36 @@ class Call extends EventEmitter {
       this.hasRemoteOffer = true;
     }
 
-    this.ua.registerDialog(this);
     this._setState('incoming');
     this.emit('update');
 
     // 180 Ringing, with our tag so the dialog is established early.
     txn.respond(this.ua.makeDialogResponse(request, 180, this));
+    // Nothing should ring for ever: if neither side ends it, we do.
+    this._startRingTimer(() => {
+      if (this.state !== 'incoming') return;
+      this.ua.log.warn('incoming call not answered in time; sending 480', { call: this.id.slice(0, 8) });
+      this.serverTxn.respond(this.ua.makeDialogResponse(this.pendingServerInvite, 480, this, 'Temporarily Unavailable'));
+      this._finish('timeout', 480, 'Not answered');
+    });
+  }
+
+  /** Safety net for a ring that never ends (lost CANCEL, PBX that never answers). */
+  _startRingTimer(onExpire) {
+    this._clearRingTimer();
+    const ms = this.ua.config.ringTimeoutMs || RING_TIMEOUT_MS;
+    this._ringTimer = setTimeout(onExpire, ms);
+    this._ringTimer.unref?.();
+  }
+
+  _clearRingTimer() {
+    if (this._ringTimer) { clearTimeout(this._ringTimer); this._ringTimer = null; }
   }
 
   /** Answer an incoming call. */
   async accept() {
     if (this.state !== 'incoming') return;
+    this._clearRingTimer();
     const request = this.pendingServerInvite;
     await this._ensureMedia();
 
@@ -727,7 +768,8 @@ class Call extends EventEmitter {
       }
       case 'CANCEL': {
         txn.respond(this.ua.makeDialogResponse(request, 200, this));
-        if (this.state === 'incoming') {
+        // 'init' too: the INVITE is registered before its media is bound.
+        if (this.direction === 'in' && (this.state === 'incoming' || this.state === 'init') && this.serverTxn) {
           this.serverTxn.respond(this.ua.makeDialogResponse(this.pendingServerInvite, 487, this));
           this._finish('cancelled', 487, 'Caller hung up');
         }
@@ -992,6 +1034,7 @@ class Call extends EventEmitter {
     this.endText = text;
     this.endedAt = Date.now();
     this._stopOkRetransmit();
+    this._clearRingTimer();
     if (this._reinviteRetry) clearTimeout(this._reinviteRetry);
     if (this.inviteTxn) this.inviteTxn.removeAllListeners();
 

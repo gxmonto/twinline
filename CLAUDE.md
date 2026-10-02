@@ -121,6 +121,16 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   answered with anything but sendrecv is offered once more (800 ms), then a
   warning toast names the direction they answered. Every SDP applied is
   logged as `sdp <role>` with offered/concluded — ask for those lines.
+- **Incoming INVITE is registered before its media is bound** (1.4.22):
+  `handleInitialInvite` calls `registerDialog` + sends 100 Trying *before*
+  `await _ensureMedia()`. A CANCEL during the bind used to find no dialog
+  (481) and the INVITE rang for ever — "calls get stuck when not answered".
+  The CANCEL case accepts state `init`; after the await a terminated call
+  releases the leg it just created. The UA also cancels an INVITE server
+  transaction it holds no call for (§9.2). `RING_TIMEOUT_MS` (3 min,
+  `config.ringTimeoutMs` in tests) ends a ring nobody ends: 480 inbound,
+  CANCEL outbound. Loopback tests: cancel during ring, cancel during a slow
+  bind (no orphan leg/dialog), ring timeout both ways.
 - **Sockets bind to 0.0.0.0**, never a specific IP: a bound IP that vanishes
   (VPN, Wi-Fi roam, sleep, Docker's vEthernet) fails every send with
   `EADDRNOTAVAIL <valid public ip>` — that was the "people stopped getting
