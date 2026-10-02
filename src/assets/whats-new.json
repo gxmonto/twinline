@@ -1,5 +1,5 @@
 {
-  "version": "1.4.19",
-  "date": "2026-09-30",
-  "notes": "- History: the Transcript button works again from the History window; the transcript opens in its own window.\n- A conference transcript is now linked from every call it covers, not only the first one, and a transcript stopped before the call ends is still attached to that call's history entry."
+  "version": "1.4.20",
+  "date": "2026-10-02",
+  "notes": "- Updates install silently: no installer wizard any more. Press \"Restart now\" on the banner (or quit) and TwinLine comes back on the new version.\n- Unattended option: in Settings → Updates choose \"Unattended\" and TwinLine downloads the update and restarts by itself when no call is active, after a 30-second warning you can postpone.\n- Prepares the version renumbering: the next release will be TwinLine 1.0.0."
 }
