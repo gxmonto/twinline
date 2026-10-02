@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.21 — 2026-10-02
+
+- Lower memory use: the interface no longer uses GPU acceleration by default (about 60 MB less), and the speech engine is unloaded three minutes after the last transcript instead of ten, freeing the ~1 GB its models occupy. Settings → General has a switch to turn GPU acceleration back on.
+
 ## 1.4.20 — 2026-10-02
 
 - Updates install silently: no installer wizard any more. Press "Restart now" on the banner (or quit) and TwinLine comes back on the new version.
