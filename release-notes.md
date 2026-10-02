@@ -1,1 +1,1 @@
-- Lower memory use: the interface no longer uses GPU acceleration by default (about 60 MB less), and the speech engine is unloaded three minutes after the last transcript instead of ten, freeing the ~1 GB its models occupy. Settings → General has a switch to turn GPU acceleration back on.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
