@@ -1,3 +1,1 @@
-- Updates install silently: no installer wizard any more. Press "Restart now" on the banner (or quit) and TwinLine comes back on the new version.
-- Unattended option: in Settings → Updates choose "Unattended" and TwinLine downloads the update and restarts by itself when no call is active, after a 30-second warning you can postpone.
-- Prepares the version renumbering: the next release will be TwinLine 1.0.0.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
