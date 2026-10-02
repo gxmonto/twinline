@@ -348,6 +348,51 @@ test('BYE tears down both sides', async (t) => {
   assert.strictEqual(env.audio.getLeg(inbound.id), null);
 });
 
+test('the caller hanging up while it rings cancels the incoming call on both sides', async (t) => {
+  const env = await makePair(26);
+  t.after(() => env.teardown());
+  const before = env.incoming.length;
+  const outgoing = await env.alice.dial('bob');
+  const inbound = await waitFor(() => env.incoming.slice(before).find((c) => c !== outgoing && c.state === 'incoming'), { label: 'ringing' });
+  await outgoing.hangup();
+  await waitFor(() => inbound.state === 'terminated' && outgoing.state === 'terminated', { label: 'both ended' });
+  assert.strictEqual(inbound.endReason, 'cancelled');
+  assert.strictEqual(inbound.endStatus, 487);
+});
+
+test('a CANCEL that arrives while the callee is still binding its media socket does not leave a stuck call', async (t) => {
+  // Mike (2026-10-02): unanswered calls stayed ringing. The incoming call was
+  // only findable after its RTP socket was bound; a CANCEL in that window got
+  // 481 and the INVITE rang on. Slow the socket bind down and cancel at once.
+  const env = await makePair(28);
+  t.after(() => env.teardown());
+  const realCreate = env.audio.createLeg.bind(env.audio);
+  env.audio.createLeg = async (...a) => { await sleep(250); return realCreate(...a); };
+
+  const before = env.incoming.length;
+  const outgoing = await env.alice.dial('bob');
+  const inbound = await waitFor(() => env.incoming.slice(before).find((c) => c !== outgoing), { label: 'callee has the INVITE' });
+  await outgoing.hangup();                                   // CANCEL goes out while bob is still in _ensureMedia
+  await waitFor(() => inbound.state === 'terminated' && outgoing.state === 'terminated', { label: 'both ended', timeout: 5000 });
+  assert.strictEqual(inbound.endReason, 'cancelled');
+  await sleep(350);                                          // let the delayed createLeg resolve
+  assert.strictEqual(env.audio.getLeg(inbound.id), null, 'no orphaned media leg');
+  assert.strictEqual(env.bob.byCallId.size, 0, 'no dialog left behind');
+});
+
+test('a ring that nobody ends is ended by the ring timeout', async (t) => {
+  const env = await makePair(30, { ringTimeoutMs: 600 }, { ringTimeoutMs: 400 });
+  t.after(() => env.teardown());
+  const before = env.incoming.length;
+  const outgoing = await env.alice.dial('bob');
+  const inbound = await waitFor(() => env.incoming.slice(before).find((c) => c !== outgoing && c.state === 'incoming'), { label: 'ringing' });
+  await waitFor(() => inbound.state === 'terminated', { label: 'callee gave up', timeout: 3000 });
+  assert.strictEqual(inbound.endStatus, 480);
+  assert.strictEqual(inbound.endReason, 'timeout');
+  await waitFor(() => outgoing.state === 'terminated', { label: 'caller saw the 480' });
+  assert.strictEqual(outgoing.endStatus, 480);
+});
+
 test('declining an incoming call reports busy to the caller', async (t) => {
   const env = await makePair(24);
   t.after(() => env.teardown());

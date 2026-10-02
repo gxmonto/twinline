@@ -10,6 +10,7 @@ const { EventEmitter } = require('events');
 const P = require('./parser');
 const { TransactionLayer, newBranch } = require('./transaction');
 const { createTransport, resolveTarget, localAddressFor, DEFAULT_PORTS } = require('./transport');
+const { transactionId } = require('./transaction');
 const { DigestStore } = require('./digest');
 const { Call, newCallId } = require('./call');
 const log = require('../log');
@@ -629,6 +630,17 @@ class UserAgent extends EventEmitter {
       return;
     }
 
+    if (method === 'CANCEL') {
+      // No dialog, but maybe the INVITE's server transaction is still here
+      // (§9.2): cancel *that*, so the caller never gets a phone that rings on.
+      const invite = this.transactions.serverTransactions.get(transactionId(request, 'INVITE'));
+      if (invite && invite.state !== 'completed' && invite.state !== 'terminated') {
+        txn.respond(this.transactions.makeResponse(request, 200));
+        invite.respond(this.transactions.makeResponse(invite.request, 487));
+        this.log.warn('cancelled an INVITE that had no call object', { callId: P.getHeader(request, 'call-id') });
+        return;
+      }
+    }
     txn.respond(this.transactions.makeResponse(request, method === 'CANCEL' ? 481 : 405));
   }
 
