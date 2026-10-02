@@ -1,1 +1,1 @@
-- Unanswered calls no longer get stuck ringing. If the caller hung up in the instant TwinLine was still setting up audio for the new call, the hang-up was missed and the call rang on; that window is closed. As a safety net, a call that rings for three minutes without anyone ending it is ended by TwinLine (480) in both directions.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
