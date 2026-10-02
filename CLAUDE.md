@@ -226,6 +226,15 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `transcriptView` panel window from any panel or from the phone window with
   dialogs-as-windows on. Showing it as a sheet inside the History panel hid
   the History sheet (exclusive overlays) and the panel closed itself.
+- **Audio self-healing** (1.4.23, `RendererAudio`): `devicechange` (debounced
+  700 ms) → re-resolve devices (configured id if present, else default) and
+  rebuild if they differ from what is in use; mic track `ended`, or `mute`
+  lasting 1.5 s → rebuild; context `interrupted`/`suspended` → resume, else
+  rebuild; a watchdog rebuilds when an *enabled* mic posts no frame for
+  2.5 s (a Bluetooth profile switch kills the track silently). Rebuilds are
+  serialised and at most one per 6 s; each one toasts via `onDeviceEvent`.
+  Mike: a Bluetooth headset left the app mute/deaf until restart. Cannot be
+  exercised on loopback — ask him to connect/disconnect the headset mid-call.
 - **Call waiting**: an incoming call during a live call plays a soft beep
   (`waiting` pattern), not the ringtone; tones share the call's AudioContext
   when the ringtone device is the speaker device, so Windows communications

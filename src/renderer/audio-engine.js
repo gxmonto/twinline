@@ -30,6 +30,91 @@ export class RendererAudio {
     };
     this.onFrame = null;
     this.lastError = null;
+    /** Called with (message, kind) when a device vanished, came back, or audio was repaired. */
+    this.onDeviceEvent = null;
+    this.micEnabled = true;
+    this.lastFrameAt = 0;
+    this._active = { input: null, output: null };   // device ids actually in use
+    this._recovering = null;
+    this._lastRecoverAt = 0;
+    this._guardsInstalled = false;
+    this._deviceChangeTimer = null;
+    this._watchdog = null;
+  }
+
+  // ---- self-healing ------------------------------------------------------
+  //
+  // Bluetooth headsets are the usual culprit: connecting, disconnecting or
+  // flipping between the music and hands-free profiles ends the microphone
+  // track and removes the output device the graph was bound to. Nothing in
+  // WebAudio repairs that by itself — the app simply went deaf and mute until
+  // it was restarted (Mike, 1.4.23). So: watch the devices, the tracks, the
+  // context and the frame flow, and rebuild the graph when any of them break.
+
+  _installGuards() {
+    if (this._guardsInstalled) return;
+    this._guardsInstalled = true;
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      clearTimeout(this._deviceChangeTimer);
+      // Headsets announce several devices in quick succession; settle first.
+      this._deviceChangeTimer = setTimeout(() => this._onDevicesChanged(), 700);
+    });
+  }
+
+  async _onDevicesChanged() {
+    if (!this.started) return;
+    const want = await this._resolveDevices();
+    const changed = want.input !== this._active.input || want.output !== this._active.output;
+    if (changed) await this._recover('audio devices changed');
+  }
+
+  /** The device ids to use now: the configured ones when present, else default. */
+  async _resolveDevices() {
+    let list = [];
+    try { list = await navigator.mediaDevices.enumerateDevices(); } catch { /* no permission yet */ }
+    const have = (kind, id) => !id || id === 'default' || list.some((d) => d.kind === kind && d.deviceId === id);
+    const { inputDeviceId, outputDeviceId } = this.settings;
+    return {
+      input: have('audioinput', inputDeviceId) ? (inputDeviceId || 'default') : 'default',
+      output: have('audiooutput', outputDeviceId) ? (outputDeviceId || 'default') : 'default',
+      inputFellBack: !have('audioinput', inputDeviceId),
+      outputFellBack: !have('audiooutput', outputDeviceId),
+    };
+  }
+
+  /** Rebuild the whole graph once; concurrent triggers share the one rebuild. */
+  _recover(reason) {
+    if (this._recovering) return this._recovering;
+    this._lastRecoverAt = Date.now();
+    this._recovering = (async () => {
+      try {
+        await this.restart();
+        const note = this._active.fallbackNote;
+        this._report(note ? `Audio reconnected (${reason}); ${note}` : `Audio reconnected (${reason})`, note ? 'warn' : '');
+      } catch (err) {
+        this._report(`Audio could not be restarted (${reason}): ${err.message}`, 'error');
+      } finally {
+        this._recovering = null;
+      }
+    })();
+    return this._recovering;
+  }
+
+  _report(message, kind = '') {
+    if (this.onDeviceEvent) this.onDeviceEvent(message, kind);
+  }
+
+  _startWatchdog() {
+    clearInterval(this._watchdog);
+    this.lastFrameAt = Date.now();
+    this._watchdog = setInterval(() => {
+      if (!this.started || !this.capture || !this.micEnabled || !this.context) return;
+      if (this.context.state === 'suspended') { this.context.resume().catch(() => {}); return; }
+      // A live microphone posts a frame every 20 ms. Silence of this length
+      // means the track died without saying so (Bluetooth profile switch).
+      const quiet = Date.now() - this.lastFrameAt;
+      if (quiet > 2500 && Date.now() - this._lastRecoverAt > 6000) this._recover('microphone stopped delivering audio');
+    }, 1000);
   }
 
   applySettings(audioSettings) {
@@ -39,8 +124,15 @@ export class RendererAudio {
   /** Bring up the capture/playback graph. Safe to call repeatedly. */
   async start() {
     if (this.started) return true;
+    this._installGuards();
 
     this.context = new AudioContext({ sampleRate: 8000, latencyHint: 'interactive' });
+    this.context.onstatechange = () => {
+      // Windows "interrupts" a context when the output device goes away.
+      if (this.started && this.context && (this.context.state === 'interrupted' || this.context.state === 'suspended')) {
+        this.context.resume().catch(() => this._recover('audio output interrupted'));
+      }
+    };
     await this.context.audioWorklet.addModule('worklets/capture-processor.js');
     await this.context.audioWorklet.addModule('worklets/playback-processor.js');
 
@@ -63,11 +155,16 @@ export class RendererAudio {
 
     this.started = true;
     if (this.context.state === 'suspended') await this.context.resume();
+    this._startWatchdog();
     return !this.lastError;
   }
 
   async _openMicrophone() {
-    const { inputDeviceId, echoCancellation, noiseSuppression, autoGainControl } = this.settings;
+    const { echoCancellation, noiseSuppression, autoGainControl } = this.settings;
+    const want = await this._resolveDevices();
+    const inputDeviceId = want.input;
+    this._active.input = inputDeviceId;
+    this._active.fallbackNote = want.inputFellBack ? 'the chosen microphone is not connected, using the system default' : null;
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: inputDeviceId && inputDeviceId !== 'default' ? { exact: inputDeviceId } : undefined,
@@ -85,14 +182,27 @@ export class RendererAudio {
       numberOfOutputs: 0,
     });
     this.capture.port.onmessage = (event) => {
+      this.lastFrameAt = Date.now();
       if (this.onFrame) this.onFrame(new Int16Array(event.data));
     };
     this.source.connect(this.capture);
     this.lastError = null;
+
+    // The track tells us when the device goes away; `mute` is also how a
+    // Bluetooth profile switch shows up, so a mute that lasts counts too.
+    for (const track of this.stream.getAudioTracks()) {
+      track.onended = () => this._recover('microphone disconnected');
+      track.onmute = () => setTimeout(() => { if (track.muted && this.stream && this.stream.getAudioTracks().includes(track)) this._recover('microphone muted by the system'); }, 1500);
+    }
   }
 
   async _applySink() {
-    const id = this.settings.outputDeviceId;
+    const want = await this._resolveDevices();
+    const id = want.output;
+    this._active.output = id;
+    if (want.outputFellBack) {
+      this._active.fallbackNote = [this._active.fallbackNote, 'the chosen speaker is not connected, using the system default'].filter(Boolean).join('; ');
+    }
     if (!id || id === 'default') return;
     try {
       if (typeof this.context.setSinkId === 'function') await this.context.setSinkId(id);
@@ -108,6 +218,9 @@ export class RendererAudio {
   }
 
   async stop() {
+    clearInterval(this._watchdog);
+    this._watchdog = null;
+    if (this.context) this.context.onstatechange = null;
     this.stopRinging();
     if (this.stream) { for (const track of this.stream.getTracks()) track.stop(); this.stream = null; }
     if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); this.capture = null; }
@@ -128,6 +241,8 @@ export class RendererAudio {
   }
 
   setMicrophoneEnabled(enabled) {
+    this.micEnabled = !!enabled;
+    this.lastFrameAt = Date.now();          // a muted mic posts nothing; do not mistake that for a dead one
     if (this.capture) this.capture.port.postMessage({ type: 'enabled', value: enabled });
   }
 
