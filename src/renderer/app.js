@@ -1294,11 +1294,18 @@ function renderUpdate(status) {
         + `<span class="bar"><span data-width="${pct}"></span></span>`;
       break;
     }
-    case 'downloaded':
-      html = `<span class="text">TwinLine <b>${v}</b> is ready to install.</span>`
-        + button('install', 'Restart and update', 'btn primary small')
-        + button('dismiss', 'On next quit', 'btn ghost small');
+    case 'downloaded': {
+      const secs = status.autoRestartAt ? Math.max(0, Math.ceil((status.autoRestartAt - Date.now()) / 1000)) : null;
+      html = (secs !== null
+        ? `<span class="text">TwinLine <b>${v}</b> is downloaded. Restarting in <b>${secs}s</b> to finish the update.</span>`
+        : `<span class="text">TwinLine <b>${v}</b> is downloaded. Restart to finish the update (no installer to click through).</span>`)
+        + button('install', 'Restart now', 'btn primary small')
+        + button('dismiss', 'Later (on next quit)', 'btn ghost small');
+      // Tick the countdown once a second while it runs.
+      clearTimeout(updateCountdownTimer);
+      if (secs !== null && secs > 0) updateCountdownTimer = setTimeout(() => renderUpdate(updateStatus), 1000);
       break;
+    }
     case 'error':
       cls = 'error';
       html = `<span class="text">Update check failed: ${esc(status.error || 'unknown error')}</span>`
@@ -1346,6 +1353,8 @@ function renderUpdate(status) {
     }[status.state] || `Version ${current}.`;
   }
 }
+
+let updateCountdownTimer = null;
 
 async function onUpdateAction(action) {
   switch (action) {

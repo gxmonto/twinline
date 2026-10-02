@@ -45,6 +45,21 @@ Rules:
   install-on-quit guard existed (`updater.disableInstallOnQuit()` in
   `runUpdateCheck`). Keep the guard. Never build a throwaway higher version
   and point a real installed copy at it.
+- **Silent updates** (1.4.20): `install()` → `quitAndInstall(true, true)` (NSIS
+  `/S`, relaunch); mode `auto` schedules an unattended restart 30 s after the
+  download (`_scheduleAutoRestart`, deferred in 30 s steps while a call is
+  up; "Later" = dismiss cancels it, install on quit). The install-on-quit
+  path was already silent.
+- **Renumbering to 1.0.0** (Mike, 2026-10-02): 1.4.20 sets
+  `autoUpdater.allowDowngrade = true` and the Linux manual check treats any
+  *different* version as the target. Sequence: (1) 1.4.20 published and on
+  every machine → (2) `gh release edit vX --prerelease` for every release
+  ≤ 1.4.19 (done right after 1.4.20 published; 1.4.20 stays "Latest") →
+  (3) `npm run release -- 1.0.0` (no v1.0.0 tag exists; releases start at
+  v1.0.4) → (4) mark 1.4.20 pre-release. A copy still on ≤ 1.4.19 when 1.0.0
+  becomes "Latest" logs "downgrade is disallowed" and must be reinstalled by
+  hand — so step 3 waits for Mike's confirmation. After 1.0.0 the counting
+  continues 1.0.1, 1.0.2…; `gh release list` shows the whole history.
 - Versioning (Mike's rule, 2026-09-23): the third number for everything —
   fixes, small features, visual tweaks — and the second number only for a big
   change. Versions are three numbers (semver, the updater orders them); the

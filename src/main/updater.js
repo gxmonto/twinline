@@ -202,6 +202,7 @@ class Updater extends EventEmitter {
       manualDownloadUrl: null,              // set when we can only point at a file
       packageKind: null,                    // 'rpm' | 'deb' when the download is a package
       pendingInstall: false,
+      autoRestartAt: null,                  // epoch ms of the unattended restart, when scheduled
     };
     this._timer = null;
     this._auto = null;
@@ -243,7 +244,11 @@ class Updater extends EventEmitter {
     };
     autoUpdater.autoDownload = this.settings.mode === 'auto';
     autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.allowDowngrade = false;
+    // Mike is renumbering: the release after 1.4.x will be 1.0.0, a *lower*
+    // version. electron-updater installs a lower "latest" only with this on
+    // (AppUpdater.isUpdateAvailable: allowDowngrade && latest < current), so
+    // every copy must run a build with it before 1.0.0 is published.
+    autoUpdater.allowDowngrade = true;
     if (this.feed) {
       try { autoUpdater.setFeedURL(this.feed); } catch (err) { log.warn('setFeedURL failed', err); }
     }
@@ -262,6 +267,9 @@ class Updater extends EventEmitter {
     autoUpdater.on('update-downloaded', (info) => {
       log.info('update downloaded', { version: info.version });
       this._set({ state: 'downloaded', version: info.version, notes: notesText(info.releaseNotes), progress: null, pendingInstall: true });
+      // Unattended mode: restart by itself once the warning has run, as long
+      // as no call is up. "Later" on the banner cancels it (install on quit).
+      if (this.settings.mode === 'auto') this._scheduleAutoRestart();
     });
     autoUpdater.on('error', (err) => {
       log.error('updater error', err);
@@ -319,7 +327,9 @@ class Updater extends EventEmitter {
     const manifest = parseLatestYml(await fetchText(url));
     if (!manifest.version) throw new Error('Update manifest is missing a version.');
 
-    if (compareVersions(manifest.version, app.getVersion()) <= 0) {
+    // Any *different* published version is the one to move to — see
+    // allowDowngrade above: the 1.4.x → 1.0.0 renumbering is a downgrade.
+    if (compareVersions(manifest.version, app.getVersion()) === 0) {
       this._set({ state: 'up-to-date', version: manifest.version });
       return;
     }
@@ -375,13 +385,35 @@ class Updater extends EventEmitter {
   /**
    * Install the downloaded update and restart. Refused while a call is up —
    * the caller shows why and the update installs on the next quit instead.
+   * The install is silent (NSIS /S): no wizard, the app simply comes back
+   * on the new version (Mike, 1.4.20).
    */
   install() {
     if (this.status.state !== 'downloaded' || !this._auto) return { ok: false, reason: 'Nothing downloaded yet.' };
     if (this.inCall()) return { ok: false, reason: 'A call is in progress. The update will install when you quit TwinLine.' };
+    this._cancelAutoRestart();
     log.info('installing update', { version: this.status.version });
-    setImmediate(() => this._auto.quitAndInstall(false, true));
+    setImmediate(() => this._auto.quitAndInstall(true, true));
     return { ok: true };
+  }
+
+  /** Unattended restart: warn for 30 s, then install; a live call defers it in 30 s steps. */
+  _scheduleAutoRestart(delayMs = 30000) {
+    this._cancelAutoRestart();
+    this._set({ autoRestartAt: Date.now() + delayMs });
+    this._restartTimer = setTimeout(() => {
+      this._restartTimer = null;
+      if (this.status.state !== 'downloaded') { this._set({ autoRestartAt: null }); return; }
+      if (this.inCall()) { log.info('unattended restart deferred: call in progress'); this._scheduleAutoRestart(30000); return; }
+      const r = this.install();
+      if (!r.ok) this._set({ autoRestartAt: null });
+    }, delayMs);
+    this._restartTimer.unref?.();
+  }
+
+  _cancelAutoRestart() {
+    if (this._restartTimer) { clearTimeout(this._restartTimer); this._restartTimer = null; }
+    if (this.status.autoRestartAt) this._set({ autoRestartAt: null });
   }
 
   /**
@@ -395,6 +427,9 @@ class Updater extends EventEmitter {
 
   /** Put the banner away until the next check; the install-on-quit still happens. */
   dismiss() {
+    // "Later": a scheduled unattended restart is called off; the update still
+    // installs (silently) when TwinLine next quits.
+    this._cancelAutoRestart();
     if (['available', 'downloaded', 'error', 'up-to-date'].includes(this.status.state)) {
       this._set({ state: 'idle', error: null });
     }
