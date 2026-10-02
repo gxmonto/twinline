@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.22 — 2026-10-02
+
+- Unanswered calls no longer get stuck ringing. If the caller hung up in the instant TwinLine was still setting up audio for the new call, the hang-up was missed and the call rang on; that window is closed. As a safety net, a call that rings for three minutes without anyone ending it is ended by TwinLine (480) in both directions.
+
 ## 1.4.21 — 2026-10-02
 
 - Lower memory use: the interface no longer uses GPU acceleration by default (about 60 MB less), and the speech engine is unloaded three minutes after the last transcript instead of ten, freeing the ~1 GB its models occupy. Settings → General has a switch to turn GPU acceleration back on.
