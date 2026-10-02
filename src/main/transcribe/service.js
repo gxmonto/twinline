@@ -376,7 +376,9 @@ class TranscriptionService extends EventEmitter {
     if (!this.live.size && this.worker) {
       // Keep the worker warm for a while; models take seconds to load.
       clearTimeout(this._idleTimer);
-      this._idleTimer = setTimeout(() => { if (!this.live.size) this._shutdownWorker(); }, 10 * 60 * 1000);
+      // Three minutes covers back-to-back calls; beyond that the ~1 GB the
+      // models occupy is better given back (reloading takes a few seconds).
+      this._idleTimer = setTimeout(() => { if (!this.live.size) this._shutdownWorker(); }, 3 * 60 * 1000);
       this._idleTimer.unref?.();
     }
     // Counters answer "did audio from each side reach the engine at all?"

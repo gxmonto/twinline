@@ -241,6 +241,16 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   every launch of one build to the same temp folder and deleted it on exit →
   `ffmpeg.dll not found`); since 1.4.3 `portable.unpackDirName: true` gives
   each launch its own folder. The installer is still what users should run.
+- **Memory** (1.4.21, measured on Mike's PC, idle, no transcript): ~575 MB
+  across 6 processes — GPU 136, main 114, phone window 105, Chromium helpers
+  ~220. `app.disableHardwareAcceleration()` unless
+  `behaviour.hardwareAcceleration` (read synchronously from settings.json
+  before 'ready'; `TWINLINE_HWACCEL=0|1` overrides) cut the GPU process to
+  62 MB. The speech worker (~1 GB with Parakeet loaded) now unloads 3 min
+  after the last transcript (was 10). Each pop-out window is a renderer
+  (~60–100 MB) and closes with its dialog. The rest is Chromium's floor.
+  `--user-data=<dir>` runs the dev app against a throwaway profile (no
+  real lines register) — use it for measurements.
 - **Models** live in `<userData>/models/{parakeet-tdt-0.6b-v3,whisper-*,vad}`,
   fetched file-by-file from Hugging Face (`csukuangfj/...`) so nothing needs
   bzip2/tar. Never bundle them in the installer.
