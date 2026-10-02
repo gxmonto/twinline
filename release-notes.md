@@ -1,1 +1,1 @@
-- Bluetooth and USB headsets: when a headset connects, disconnects or switches profile mid-use, TwinLine now reconnects its audio by itself (falling back to the system default device if the chosen one is gone, and returning to it when it comes back). Before, the app went silent until it was restarted.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
