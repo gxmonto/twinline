@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.24 — 2026-10-03
+
+- Settings, contacts and call history saves no longer fail when an antivirus scanner briefly holds the file (a Windows quirk that made "Save" do nothing on one PC). The save is retried for a moment and, if it still cannot be completed the usual way, written directly so nothing is lost. Any failure is now also written to the log.
+
 ## 1.4.23 — 2026-10-02
 
 - Bluetooth and USB headsets: when a headset connects, disconnects or switches profile mid-use, TwinLine now reconnects its audio by itself (falling back to the system default device if the chosen one is gone, and returning to it when it comes back). Before, the app went silent until it was restarted.
