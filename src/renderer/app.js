@@ -805,6 +805,8 @@ function renderSettingsAccounts() {
         Ignore SIP messages that do not come from this server <em class="dim">(blocks scanners and spoofed calls; needs registration)</em></label>
       <label class="check"><input type="checkbox" id="${p}_mediaStrictSource">
         Ignore call audio that does not come from the address the server announced <em class="dim">(turn off only if you get one-way audio)</em></label>
+      <label class="check"><input type="checkbox" id="${p}_natRewriteContact">
+        Advertise the public address the server reports <em class="dim">(turn off if the line registers once and then times out: that is a router with SIP ALG)</em></label>
       <p class="hint" data-status="${index}"></p>`;
 
     const set = (field, value) => { const el = $(`${p}_${field}`); if (el) el.value = value ?? ''; };
@@ -814,6 +816,7 @@ function renderSettingsAccounts() {
     check('register', account.register);
     check('acceptFromServerOnly', account.acceptFromServerOnly !== false);
     check('mediaStrictSource', account.mediaStrictSource !== false);
+    check('natRewriteContact', account.natRewriteContact !== false);
     for (const field of ['label', 'domain', 'username', 'authUsername', 'displayName',
       'outboundProxy', 'transport', 'registerExpires', 'keepAliveSeconds', 'dtmfMode',
       'holdDirection', 'localPort', 'publicAddress']) {
@@ -903,6 +906,7 @@ async function saveSettings() {
     account.register = checked('register');
     account.acceptFromServerOnly = checked('acceptFromServerOnly');
     account.mediaStrictSource = checked('mediaStrictSource');
+    account.natRewriteContact = checked('natRewriteContact');
     account.label = value('label') || `Line ${index + 1}`;
     account.domain = value('domain').trim();
     account.username = value('username').trim();

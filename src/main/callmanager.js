@@ -92,6 +92,25 @@ class CallManager extends EventEmitter {
 
   // ---- accounts -----------------------------------------------------------
 
+  /**
+   * Apply account settings without making the caller wait for the network.
+   * Saves are serialised; a save that arrives while one is in flight simply
+   * replaces the pending one (only the newest matters).
+   */
+  applyAccountsLater(configs) {
+    this._pendingAccounts = configs;
+    if (this._applying) return this._applying;
+    this._applying = (async () => {
+      while (this._pendingAccounts) {
+        const next = this._pendingAccounts;
+        this._pendingAccounts = null;
+        try { await this.applyAccounts(next); } catch (err) { this.emit('warning', { message: `Applying line settings failed: ${err.message}` }); }
+      }
+      this._applying = null;
+    })();
+    return this._applying;
+  }
+
   async applyAccounts(configs) {
     const seen = new Set();
 
