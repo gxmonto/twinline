@@ -1,2 +1,1 @@
-- Lines behind a router with SIP ALG: TwinLine no longer puts its public address into the Via header, which such routers choke on (the line registered once and then every request "timed out"). If a line still registers once and then times out, the status now says so and suggests TCP or the new per-line switch "Advertise the public address the server reports".
-- Settings → Save returns at once; re-registering the lines happens in the background. On a bad network it used to hang for half a minute, so the Save button looked dead.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
