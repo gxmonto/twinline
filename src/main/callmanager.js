@@ -22,6 +22,7 @@ const { UserAgent } = require('./sip/useragent');
 const log = require('./log').child('calls');
 const fs = require('fs');
 const path = require('path');
+const { writeFileAtomic } = require('./fsutil');
 
 const MAX_HISTORY = 300;
 
@@ -247,10 +248,7 @@ class CallManager extends EventEmitter {
   _saveHistory() {
     if (!this.historyFile) return;
     try {
-      fs.mkdirSync(path.dirname(this.historyFile), { recursive: true });
-      const tmp = `${this.historyFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(this.history), { mode: 0o600 });
-      fs.renameSync(tmp, this.historyFile);
+      writeFileAtomic(this.historyFile, JSON.stringify(this.history), { mode: 0o600 });
     } catch (err) {
       log.warn('could not save call history', err);
     }

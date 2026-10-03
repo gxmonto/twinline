@@ -925,6 +925,7 @@ function handle(channel, fn) {
     try {
       return { ok: true, data: await fn(...args) };
     } catch (err) {
+      log.warn('main', `ipc ${channel} failed`, err);
       return { ok: false, error: err.message || String(err) };
     }
   });

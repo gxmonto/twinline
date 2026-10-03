@@ -7,6 +7,7 @@
  */
 
 const fs = require('fs');
+const { writeFileAtomic } = require('./fsutil');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -69,10 +70,7 @@ class ContactStore {
   }
 
   save() {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.contacts, null, 2));
-    fs.renameSync(tmp, this.file);
+    writeFileAtomic(this.file, JSON.stringify(this.contacts, null, 2), { mode: 0o644 });
   }
 
   list() {
