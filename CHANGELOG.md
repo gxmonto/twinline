@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.25 — 2026-10-03
+
+- Lines behind a router with SIP ALG: TwinLine no longer puts its public address into the Via header, which such routers choke on (the line registered once and then every request "timed out"). If a line still registers once and then times out, the status now says so and suggests TCP or the new per-line switch "Advertise the public address the server reports".
+- Settings → Save returns at once; re-registering the lines happens in the background. On a bad network it used to hang for half a minute, so the Save button looked dead.
+
 ## 1.4.24 — 2026-10-03
 
 - Settings, contacts and call history saves no longer fail when an antivirus scanner briefly holds the file (a Windows quirk that made "Save" do nothing on one PC). The save is retried for a moment and, if it still cannot be completed the usual way, written directly so nothing is lost. Any failure is now also written to the log.
