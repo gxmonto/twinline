@@ -18,6 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const { writeFileAtomic } = require('./fsutil');
+
 const SECRET_PREFIX = 'enc:v1:';
 
 function defaultAccount(index) {
@@ -157,10 +159,7 @@ class SettingsStore {
       account.password = this._encrypt(account.password);
     }
 
-    fs.mkdirSync(this.dir, { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(onDisk, null, 2), { mode: 0o600 });
-    fs.renameSync(tmp, this.file);
+    writeFileAtomic(this.file, JSON.stringify(onDisk, null, 2), { mode: 0o600 });
     if (os.platform() !== 'win32') {
       try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
     }

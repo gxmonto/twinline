@@ -217,6 +217,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - **`.hidden` is `!important`**: element rules written later in styles.css
   (e.g. `.contact-form { display: grid }`) silently beat it by source order —
   that is why the contact form showed all the time until 1.4.5.
+- **Atomic writes go through `fsutil.writeFileAtomic`** (1.4.24): write
+  .tmp, rename with retries on EPERM/EBUSY/EACCES (Windows scanners hold a
+  just-written file for a few ms — a user's Settings "never saved"), then
+  write in place as a last resort. `handle()` now logs every failed IPC
+  (`ipc <channel> failed`) so "the button does nothing" is in the log.
 - **Call history** persists in `<userData>/history.json` (CallManager
   `historyFile`, atomic write on every change, last 300 calls). A finished
   transcript carries `callIds` (record + every `partyLabels` key) and is
