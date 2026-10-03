@@ -44,6 +44,9 @@ function defaultAccount(index) {
     publicAddress: '',
     acceptFromServerOnly: true,
     mediaStrictSource: true,
+    // Put the public address the server reports (rport/received) into our
+    // Contact. Off for routers with SIP ALG, which choke on it.
+    natRewriteContact: true,
   };
 }
 

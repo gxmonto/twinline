@@ -104,6 +104,18 @@ test('a UA with a registrar ignores SIP from other hosts', () => {
   assert.strictEqual(ua.acceptsSource('203.0.113.9'), false);
 });
 
+test('Via carries our own address; Contact carries the learned public one only when allowed', () => {
+  const { UserAgent } = require('../src/main/sip/useragent');
+  const ua = new UserAgent({ id: 'x', username: 'u', domain: 'pbx.example', register: true }, { mixer: {} });
+  ua.localAddress = '192.168.1.11'; ua.localPort = 5062;
+  ua.publicAddress = '203.0.113.9'; ua.publicPort = 40000;
+  assert.strictEqual(ua.viaHost, '192.168.1.11', 'Via is never rewritten (RFC 3581 rport does that server-side)');
+  assert.strictEqual(ua.viaPort, 5062);
+  assert.ok(ua.contactHeader().includes('203.0.113.9:40000'), 'Contact uses the public address by default');
+  ua.config.natRewriteContact = false;
+  assert.ok(ua.contactHeader().includes('192.168.1.11:5062'), 'and our own when the line says so (SIP ALG routers)');
+});
+
 test('a redirect may not move a download from https to plain http', async () => {
   const { followRedirect } = require('../src/main/urlpolicy');
   assert.strictEqual(followRedirect('https://a.example/x', '/y'), 'https://a.example/y');

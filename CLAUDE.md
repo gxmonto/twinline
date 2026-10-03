@@ -131,6 +131,20 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `config.ringTimeoutMs` in tests) ends a ring nobody ends: 480 inbound,
   CANCEL outbound. Loopback tests: cancel during ring, cancel during a slow
   bind (no orphan leg/dialog), ring timeout both ways.
+- **Via is never rewritten; Contact may be** (1.4.25). `viaHost/viaPort` are
+  the local socket; `contactHost/contactPort` use the rport-learned public
+  address unless `natRewriteContact` is false. A user's router (SIP ALG)
+  passed the first REGISTER (private Via) and dropped every request after
+  the public address went into Via — green, then "request timed out" for
+  ever, outgoing INVITEs unanswered; RustDesk could not reach that PC
+  either. `_onRegisterFailure` appends a SIP-ALG hint when a timeout follows
+  a success on the same transport. Advice order: TCP transport → turn off
+  "Advertise public address" → disable SIP ALG on the router.
+- **Settings save never waits for the network** (1.4.25): `settings:save`
+  persists and returns; `manager.applyAccountsLater` serialises/coalesces the
+  re-apply; `ua.stop({unregister:true})` caps the un-REGISTER wait at 3 s.
+  Before, a save waited 32 s for an un-register that never got an answer and
+  the user clicked Save twenty times (visible as 20 "SIP trace disabled").
 - **Sockets bind to 0.0.0.0**, never a specific IP: a bound IP that vanishes
   (VPN, Wi-Fi roam, sleep, Docker's vEthernet) fails every send with
   `EADDRNOTAVAIL <valid public ip>` — that was the "people stopped getting

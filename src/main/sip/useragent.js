@@ -37,6 +37,7 @@ const DEFAULTS = {
   mediaPortRange: [16384, 32766],
   acceptFromServerOnly: true,   // ignore SIP from anywhere but the registrar
   mediaStrictSource: true,      // ignore RTP from anywhere but the SDP address
+  natRewriteContact: true,      // advertise the learned public address in Contact
 };
 
 class UserAgent extends EventEmitter {
@@ -90,12 +91,28 @@ class UserAgent extends EventEmitter {
 
   // ---- addressing ---------------------------------------------------------
 
+  /**
+   * Via carries *our* address; the server corrects it with received/rport
+   * (RFC 3581). It used to carry the learned public address, and that is what
+   * a router with SIP ALG chokes on: the first REGISTER (private Via) works,
+   * every later request (public Via) is dropped — one user's line went green,
+   * then "request timed out" for ever (2026-10-03). Never again.
+   */
   get viaHost() {
-    return this.publicAddress || this.localAddress || '0.0.0.0';
+    return this.localAddress || '0.0.0.0';
   }
 
   get viaPort() {
-    return this.publicPort || this.localPort;
+    return this.localPort;
+  }
+
+  /** Contact: the public address when learned and allowed, else our own. */
+  get contactHost() {
+    return (this.config.natRewriteContact !== false && this.publicAddress) || this.localAddress || '0.0.0.0';
+  }
+
+  get contactPort() {
+    return (this.config.natRewriteContact !== false && this.publicPort) || this.localPort;
   }
 
   /** Address the RTP sockets bind to. */
@@ -122,8 +139,8 @@ class UserAgent extends EventEmitter {
     const uri = {
       scheme: this.secure ? 'sips' : 'sip',
       user: this.config.username,
-      host: this.viaHost,
-      port: this.viaPort,
+      host: this.contactHost,
+      port: this.contactPort,
       params,
       headers: {},
     };
@@ -288,7 +305,12 @@ class UserAgent extends EventEmitter {
       try { await call.hangup('Account stopped'); } catch { /* best effort */ }
     }
     if (unregister && this.config.register && this.registration.state === 'registered') {
-      try { await this._sendRegister(0); } catch { /* best effort */ }
+      // Best effort with a short cap: on a network that drops our packets the
+      // transaction would otherwise wait 32 s, and so would whoever stopped us.
+      await Promise.race([
+        this._sendRegister(0).catch(() => {}),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
     }
     this._setRegistration('unregistered', { reason: 'Stopped' });
     if (this.transactions) this.transactions.close();
@@ -412,7 +434,7 @@ class UserAgent extends EventEmitter {
     this.publicPort = newPort;
     this.emit('natDiscovered', { address: this.publicAddress, port: this.publicPort });
 
-    if (!this._natReregistered) {
+    if (!this._natReregistered && this.config.natRewriteContact !== false) {
       this._natReregistered = true;
       setTimeout(() => this.register(), 50);
     }
@@ -422,12 +444,17 @@ class UserAgent extends EventEmitter {
     if (status === 403 || status === 401 || status === 407) this.auth.clear();
     this.registration.retries += 1;
     const backoff = Math.min(300, 5 * Math.pow(2, Math.min(this.registration.retries, 6)));
+    if (/timed out/i.test(reason) && this._registeredOnThisTransport) {
+      reason = `${reason} after a successful registration — the router may be running SIP ALG: try the TCP transport, or turn off "Advertise public address" for this line`;
+    }
     this._setRegistration('failed', { reason, expires: 0 });
     clearTimeout(this._registerTimer);
     if (!this.stopped) this._registerTimer = setTimeout(() => this.register(), backoff * 1000);
   }
 
   _setRegistration(state, patch) {
+    if (state === 'registered') this._registeredOnThisTransport = true;
+    if (state === 'unregistered') this._registeredOnThisTransport = false;
     const before = this.registration.state;
     this.registration = { ...this.registration, state, ...patch };
     if (before !== state || state === 'failed') {

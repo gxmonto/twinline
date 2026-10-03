@@ -967,7 +967,10 @@ function registerIpc() {
     log.setTraceSip(saved.behaviour.sipTrace);
     updater.configure(saved.updates);
     transcription.configure(saved.transcription);
-    await manager.applyAccounts(saved.accounts);
+    // The save is done once it is on disk. Re-registering lines can take a
+    // while on a bad network (an un-register that never gets an answer); a
+    // user clicked Save twenty times while it waited. It runs in the background.
+    manager.applyAccountsLater(saved.accounts);
     updatePopup();
     // Every window caches the redacted settings; tell them all.
     send('settings', settings.redacted());
