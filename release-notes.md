@@ -1,1 +1,1 @@
-- Settings, contacts and call history saves no longer fail when an antivirus scanner briefly holds the file (a Windows quirk that made "Save" do nothing on one PC). The save is retried for a moment and, if it still cannot be completed the usual way, written directly so nothing is lost. Any failure is now also written to the log.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
