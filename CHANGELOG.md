@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.26 — 2026-10-05
+
+- Typing a number with the phone window focused but the number box not clicked no longer doubles the digit.
+
 ## 1.4.25 — 2026-10-03
 
 - Lines behind a router with SIP ALG: TwinLine no longer puts its public address into the Via header, which such routers choke on (the line registered once and then every request "timed out"). If a line still registers once and then times out, the status now says so and suggests TCP or the new per-line switch "Advertise the public address the server reports".
