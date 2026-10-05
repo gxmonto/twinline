@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Typing a number with the phone window focused but the number box not clicked no longer doubles the digit.

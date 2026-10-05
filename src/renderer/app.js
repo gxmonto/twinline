@@ -335,7 +335,14 @@ function onGlobalKey(e) {
     }
     return;
   }
-  if (/^[0-9*#]$/.test(e.key)) { pressDigit(e.key); return; }
+  if (/^[0-9*#]$/.test(e.key)) {
+    // pressDigit() appends the digit and focuses the dial box; without this
+    // the browser then also types the key into that box — doubled digits
+    // whenever the window, not the box, had focus (Mike, 1.4.26).
+    e.preventDefault();
+    pressDigit(e.key);
+    return;
+  }
   if (e.key === 'Enter') {
     const incoming = state.calls.find((c) => c.state === 'incoming');
     if (incoming) guard(api.call.answer(incoming.id));
