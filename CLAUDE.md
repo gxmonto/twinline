@@ -245,6 +245,16 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `transcriptView` panel window from any panel or from the phone window with
   dialogs-as-windows on. Showing it as a sheet inside the History panel hid
   the History sheet (exclusive overlays) and the panel closed itself.
+- **Linux Bluetooth call profile** (1.4.27, `linuxbt.js`): PipeWire/Pulse
+  only auto-switch A2DP→HFP when a capture stream targets the headset, and
+  Chromium asks for "default", so under A2DP the far end heard nothing
+  (Mike, Fedora). On the first `calling`/`ringing`/`connected` call, every
+  `bluez_card.*` in an `a2dp*` profile is set (via `pactl set-card-profile`)
+  to the best available `headset-head-unit*` (mSBC preferred); 2 s after
+  the last call ends it is restored. Incoming ringing does not switch (music
+  stays hi-fi until answered). `behaviour.bluetoothCallProfile` (default on)
+  disables it. Parser + flow are unit-tested against pipewire-pulse output;
+  not run on a real Fedora box here — ask Mike.
 - **Audio self-healing** (1.4.23, `RendererAudio`): `devicechange` (debounced
   700 ms) → re-resolve devices (configured id if present, else default) and
   rebuild if they differ from what is in use; mic track `ended`, or `mute`

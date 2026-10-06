@@ -84,6 +84,9 @@ const DEFAULT_SETTINGS = {
     // GPU compositing for the UI. Off saves ~100 MB; on only helps on very
     // slow CPUs. Read before app 'ready'; a change needs a restart.
     hardwareAcceleration: false,
+    // Linux only: switch Bluetooth headsets to their headset (microphone)
+    // profile while a call is up and back to high-quality music afterwards.
+    bluetoothCallProfile: true,
     // The version whose "What's new" the user dismissed with "don't show again".
     whatsNewSeen: '',
   },
