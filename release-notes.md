@@ -1,1 +1,1 @@
-- Linux: Bluetooth headsets now switch to their call profile (microphone on) when a call starts and back to high-quality music a moment after the last call ends, the way Windows does by itself. Before, the headset stayed in music mode and the other side could not hear you. Can be turned off under Settings → Behaviour.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
