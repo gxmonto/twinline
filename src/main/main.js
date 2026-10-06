@@ -18,6 +18,7 @@ const { Updater } = require('./updater');
 const { ModelStore } = require('./transcribe/models');
 const { TranscriptionService } = require('./transcribe/service');
 const { cleanStaleAppImageEntries } = require('./linuxdesktop');
+const { BluetoothProfiles } = require('./linuxbt');
 
 const isDev = process.argv.includes('--dev');
 // Headless self-check: boot everything, verify the UI came up, print a
@@ -721,6 +722,10 @@ function openPanel(name, params = {}) {
 }
 
 /** Keep the machine awake while a call is up. */
+// Linux: flip Bluetooth headsets to their call profile for the duration of a
+// call, as Windows does by itself (see linuxbt.js). No-op elsewhere.
+const bluetooth = new BluetoothProfiles({ enabled: () => !settings || settings.data.behaviour.bluetoothCallProfile !== false });
+
 function updatePowerBlocker() {
   const inCall = manager && manager.activeCalls().length > 0;
   if (inCall && powerBlockerId === null) {
@@ -818,7 +823,7 @@ async function bootstrap() {
     historyFile: path.join(app.getPath('userData'), 'history.json'),
   });
 
-  manager.on('calls', (snapshot) => { send('state', snapshot); updatePowerBlocker(); updatePopup(); });
+  manager.on('calls', (snapshot) => { send('state', snapshot); updatePowerBlocker(); updatePopup(); bluetooth.update(snapshot.calls); });
   manager.on('accounts', (accounts) => send('accounts', accounts));
   manager.on('incoming', (call) => { send('incoming', call); focusIfConfigured(); });
   manager.on('callEnded', (info) => send('callEnded', info));
