@@ -181,8 +181,8 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   checks `btnSettings` fits at `minWidth` 380 (1.4.5; it did not before).
 - **Popup placement** (1.4.9): centred over the main window when it is on
   screen, else the centre of the phone's display (cursor's display if the
-  phone is hidden). Nothing is remembered any more (`popupPosition` is a dead
-  settings key): Mike's test laptop kept getting the popup at a screen edge
+  phone is hidden). Nothing is remembered any more (the `popupPosition` key
+  was removed in 1.4.28; `mergeDefaults` drops it from old files): Mike's test laptop kept getting the popup at a screen edge
   through 1.4.8 and he asked for "the middle of the screen". Every position
   goes through `clampToDisplay`; the Settings button re-centres on demand;
   the smoke test checks both the docked-phone and hidden-phone cases.
@@ -285,10 +285,6 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   removed. The README carries the legal note instead.
 - **Frameless main window** (Mike disliked the doubled title bar), own
   minimise/maximise/close; double-click the bar to maximise.
-- **Portable exe** used to break if launched twice (electron-builder unpacked
-  every launch of one build to the same temp folder and deleted it on exit →
-  `ffmpeg.dll not found`); since 1.4.3 `portable.unpackDirName: true` gives
-  each launch its own folder. The installer is still what users should run.
 - **Memory** (1.4.21, measured on Mike's PC, idle, no transcript): ~575 MB
   across 6 processes — GPU 136, main 114, phone window 105, Chromium helpers
   ~220. `app.disableHardwareAcceleration()` unless
@@ -310,8 +306,9 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   still reads `enc:v1:` values written by any backend so nobody is locked out.
 - **Portable exe** unpacks to a per-launch temp folder (`portable.unpackDirName:
   true` — electron-builder's docs say `false` but its code maps `false` to a
-  fixed per-build id and only `true` to NSIS's per-launch `$PLUGINSDIR`), so
-  two launches no longer delete each other's files.
+  fixed per-build id and only `true` to NSIS's per-launch `$PLUGINSDIR`). Before
+  1.4.3 two launches deleted each other's files (`ffmpeg.dll not found`). The
+  installer is still what users should run.
 
 ## Security posture (1.4.0 review — keep it this way)
 

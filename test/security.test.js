@@ -168,7 +168,7 @@ test('passwords count as unencrypted when Electron falls back to its basic_text 
   });
 
   const weak = new SettingsStore(dir, fake('basic_text'));
-  assert.strictEqual(weak.encryptionAvailable, false, 'a hardcoded key is not encryption');
+  assert.strictEqual(weak.encryptionBackend, null, 'a hardcoded key is not encryption');
   assert.strictEqual(weak.encryptionBackend, null);
   const data = weak.load();
   data.accounts[0].password = 'secret';
@@ -177,7 +177,6 @@ test('passwords count as unencrypted when Electron falls back to its basic_text 
   assert.strictEqual(onDisk.accounts[0].password, 'secret', 'stored plainly (0600) rather than pretending');
 
   const real = new SettingsStore(dir, fake('gnome_libsecret'));
-  assert.strictEqual(real.encryptionAvailable, true);
   assert.strictEqual(real.encryptionBackend, 'gnome_libsecret');
   real.load();
   real.save();
@@ -192,7 +191,7 @@ test('passwords count as unencrypted when Electron falls back to its basic_text 
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')).accounts[0].password, 'secret');
 
   const none = new SettingsStore(dir, { isEncryptionAvailable: () => false });
-  assert.strictEqual(none.encryptionAvailable, false);
+  assert.strictEqual(none.encryptionBackend, null);
 });
 
 test('update server must be https unless it is on the local network', () => {

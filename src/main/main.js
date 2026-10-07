@@ -294,7 +294,6 @@ async function runSmokeTest() {
     await new Promise((r) => setTimeout(r, 300));
     const { workArea } = screen.getDisplayMatching(mainWindow.getBounds());
     mainWindow.setPosition(workArea.x + workArea.width - w0, workArea.y + 40, false);
-    settings.data.behaviour.popupPosition = { x: workArea.x + 4, y: workArea.y + 4 };
     createPopup(44 + POPUP_CALL_HEIGHT);
     await new Promise((r) => setTimeout(r, 400));
     const [px, py] = popupWindow.getPosition();
@@ -309,7 +308,6 @@ async function runSmokeTest() {
     // Wait for 'closed': its handler nulls popupWindow and must not fire after
     // the next createPopup() has assigned the new one.
     await new Promise((r) => { popupWindow.once('closed', r); popupWindow.close(); });
-    settings.data.behaviour.popupPosition = null;
     if (!report.popup.overMain || !report.popup.onScreen) problems.push(`popup did not open over the main window: ${JSON.stringify(report.popup)}`);
     // …and with the phone hidden (tray) it sits in the middle of the screen.
     mainWindow.hide();
@@ -487,8 +485,6 @@ function updatePopup() {
 
 /** Put the popup where it belongs right now (over the phone, else screen centre). */
 function resetPopupPosition() {
-  settings.data.behaviour.popupPosition = null;     // legacy key; no longer used
-  settings.save();
   let moved = false;
   if (popupWindow && !popupWindow.isDestroyed()) {
     const [, h] = popupWindow.getSize();
@@ -610,7 +606,7 @@ function maybeShowWhatsNew() {
   const wn = readWhatsNew();
   if (!wn || wn.version !== app.getVersion()) return;
   if (settings.data.behaviour.whatsNewSeen === wn.version) return;
-  sendTo(mainWindow, 'whatsnew', wn);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('whatsnew', wn);
 }
 
 /**
@@ -627,11 +623,6 @@ function send(channel, payload) {
 /** The 50 Hz speaker stream only ever plays in the main window. */
 function sendAudio(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
-}
-
-/** Send to one window only (the what's-new dialog belongs to the phone window). */
-function sendTo(win, channel, payload) {
-  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
 // ---- popped-out panels -----------------------------------------------------
@@ -955,16 +946,12 @@ function registerIpc() {
     electron: process.versions.electron,
     windowControls: 'native',             // the OS draws min/max/close; the page must not
     titleBarHeight: TITLE_BAR_HEIGHT,
-    encryptionAvailable: settings.encryptionAvailable,
     encryptionBackend: settings.encryptionBackend,
   }));
 
   handle('settings:get', () => settings.redacted());
   handle('settings:save', async (update) => {
-    // The popup position is owned by the popup itself, never by the form.
-    const position = settings.data.behaviour.popupPosition;
     const saved = settings.applyUpdate(update);
-    saved.behaviour.popupPosition = position;
     settings.save();
     audio.setMicGain(saved.audio.micGain);
     audio.setSpeakerGain(saved.audio.speakerGain);
