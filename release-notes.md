@@ -1,1 +1,1 @@
-- Internal clean-up: removed unused settings and dead code. No change in behaviour.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
