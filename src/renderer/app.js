@@ -118,7 +118,7 @@ async function startAudio() {
   if (PANEL || audio.started || audioStarting) return;
   audioStarting = true;
   audio.applySettings(settings.audio);
-  audio.onDeviceEvent = (message, kind) => toast(message, kind);
+  audio.onDeviceEvent = (message, kind) => { toast(message, kind); api.log.note(message).catch(() => {}); };
   try {
     await audio.start();
     audio.onFrame = (frame) => api.audio.sendMicFrame(frame);

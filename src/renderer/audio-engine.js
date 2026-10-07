@@ -62,10 +62,10 @@ export class RendererAudio {
   }
 
   async _onDevicesChanged() {
-    if (!this.started) return;
-    const want = await this._resolveDevices();
-    const changed = want.input !== this._active.input || want.output !== this._active.output;
-    if (changed) await this._recover('audio devices changed');
+    // Always rebuild. With "default" devices the resolved ids never change,
+    // yet the old graph stays bound to the physical device that just left or
+    // came back (Windows, Bluetooth headset idling off and on — 1.4.29).
+    if (this.started) await this._recover('audio devices changed');
   }
 
   /** The device ids to use now: the configured ones when present, else default. */
@@ -88,7 +88,7 @@ export class RendererAudio {
     this._lastRecoverAt = Date.now();
     this._recovering = (async () => {
       try {
-        await this.restart();
+        await Promise.race([this.restart(), new Promise((_, rej) => setTimeout(() => rej(new Error('rebuild timed out')), 8000))]);
         const note = this._active.fallbackNote;
         this._report(note ? `Audio reconnected (${reason}); ${note}` : `Audio reconnected (${reason})`, note ? 'warn' : '');
       } catch (err) {
@@ -227,7 +227,7 @@ export class RendererAudio {
     if (this.source) { this.source.disconnect(); this.source = null; }
     if (this.playback) { this.playback.disconnect(); this.playback = null; }
     if (this.ringContext === this.context) this.ringContext = null;   // shared; closes below
-    if (this.context) { await this.context.close().catch(() => {}); this.context = null; }
+    if (this.context) { this.context.close().catch(() => {}); this.context = null; }   // not awaited: close() can hang on a vanished device
     this.started = false;
   }
 

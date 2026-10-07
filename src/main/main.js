@@ -989,6 +989,7 @@ function registerIpc() {
   handle('update:dismiss', () => updater.dismiss());
   handle('popup:reset', () => resetPopupPosition());
   handle('log:open', async () => { await shell.openPath(log.dir); return { dir: log.dir }; });
+  handle('log:note', ({ message }) => { log.info('renderer', String(message).slice(0, 500)); return { ok: true }; });
   handle('network:refresh', ({ reason }) => manager.refreshNetwork(reason || 'requested'));
 
   const contactsChanged = (result) => { send('contacts:changed', {}); return result; };

@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('twinline', {
 
   log: {
     openFolder: () => call('log:open'),
+    note: (message) => call('log:note', { message }),
   },
 
   network: {
