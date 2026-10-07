@@ -165,7 +165,6 @@ function manifestUrl(feed, name) {
   }
   return `${feed.url}/${name}`;
 }
-const linuxManifestUrl = (feed) => manifestUrl(feed, 'latest-linux.yml');
 
 /**
  * The Windows portable exe cannot be updated in place either: electron-updater
@@ -458,4 +457,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, manifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl };
+module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, manifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl };

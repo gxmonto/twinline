@@ -15,15 +15,11 @@
  */
 
 const { execFile } = require('child_process');
+const { promisify } = require('util');
 const log = require('./log').child('bluetooth');
 
 /** Headset profiles in order of preference (mSBC is the better-sounding HFP codec). */
-const HEADSET_PREFERENCE = [
-  /^headset-head-unit-msbc$/, /^headset_head_unit_msbc$/,
-  /^headset-head-unit$/, /^headset_head_unit$/,
-  /^headset-head-unit-/, /^headset_head_unit_/,
-  /^handsfree_head_unit/, /^handsfree-head-unit/, /^hfp_hf/, /^hsp_hs/,
-];
+const HEADSET_PREFERENCE = [/^headset[-_]head[-_]unit[-_]msbc$/, /^headset[-_]head[-_]unit/, /^(handsfree|hfp_hf|hsp_hs)/];
 
 /**
  * Parse `pactl list cards` into Bluetooth cards with their profiles.
@@ -64,11 +60,7 @@ function headsetProfileFor(card) {
   return null;
 }
 
-function pactl(args, { exec = execFile } = {}) {
-  return new Promise((resolve, reject) => {
-    exec('pactl', args, { timeout: 4000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
-  });
-}
+const pactl = (args, { exec = execFile } = {}) => promisify(exec)('pactl', args, { timeout: 4000 }).then((r) => String(r.stdout ?? r));   // execFile resolves {stdout}; a plain callback fn resolves stdout
 
 class BluetoothProfiles {
   constructor({ exec = execFile, enabled = () => true } = {}) {
@@ -78,7 +70,6 @@ class BluetoothProfiles {
     this.restore = new Map();
     this.inCall = false;
     this._restoreTimer = null;
-    this._missing = false;              // pactl not installed: say so once, then stay quiet
     this._busy = Promise.resolve();
   }
 
@@ -109,7 +100,7 @@ class BluetoothProfiles {
     try {
       cards = parseCards(await pactl(['list', 'cards'], { exec: this.exec }));
     } catch (err) {
-      if (!this._missing) { this._missing = true; log.info('pactl unavailable; Bluetooth profiles are left to the desktop', { error: err.message }); }
+      log.info('pactl unavailable; Bluetooth profiles are left to the desktop', { error: err.message });
       return;
     }
     for (const card of cards) {
@@ -126,15 +117,15 @@ class BluetoothProfiles {
   }
 
   async restoreProfiles() {
-    for (const [card, profile] of [...this.restore]) {
+    for (const [card, profile] of this.restore) {
       try {
         await pactl(['set-card-profile', card, profile], { exec: this.exec });
         log.info('restored Bluetooth headset profile', { card, to: profile });
       } catch (err) {
         log.warn('could not restore Bluetooth profile', { card, to: profile, error: err.message });
       }
-      this.restore.delete(card);
     }
+    this.restore.clear();
   }
 }
 

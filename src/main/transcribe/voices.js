@@ -65,7 +65,7 @@ class VoiceClusterer {
     if (founds) {
       const voice = { id: this.voices.length + 1, centroid: e, count: 1 };
       this.voices.push(voice);
-      return { voice: voice.id, similarity: bestSim, isNew: true, confident: !best || true };
+      return { voice: voice.id, similarity: bestSim, isNew: true, confident: true };
     }
 
     // Running mean keeps the centroid representative as more is heard; an

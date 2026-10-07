@@ -11,7 +11,7 @@ Module._load = function (request, ...rest) {
   }
   return realLoad.call(this, request, ...rest);
 };
-const { compareVersions, parseLatestYml, feedFromUrl, linuxManifestUrl, manifestUrl, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl } = require('../src/main/updater');
+const { compareVersions, parseLatestYml, feedFromUrl, manifestUrl, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl } = require('../src/main/updater');
 Module._load = realLoad;
 
 test('the Windows portable exe is sent to the new portable file, not the installer', () => {
@@ -19,7 +19,6 @@ test('the Windows portable exe is sent to the new portable file, not the install
   assert.strictEqual(portableDownloadUrl(gh, '1.4.8'), 'https://github.com/gxmonto/twinline/releases/download/v1.4.8/TwinLine-Portable-1.4.8.exe');
   assert.strictEqual(portableDownloadUrl({ provider: 'generic', url: 'https://u.example/tl' }, '1.4.8'), 'https://u.example/tl/TwinLine-Portable-1.4.8.exe');
   assert.strictEqual(manifestUrl(gh, 'latest.yml'), 'https://github.com/gxmonto/twinline/releases/latest/download/latest.yml');
-  assert.strictEqual(linuxManifestUrl(gh), 'https://github.com/gxmonto/twinline/releases/latest/download/latest-linux.yml');
 });
 
 test('deb/rpm installs are sent to their own package, never the AppImage', () => {
@@ -96,6 +95,5 @@ test('feed URLs map to the right provider', () => {
   assert.deepStrictEqual(feedFromUrl('https://github.com/acme/twinline.git/'), { provider: 'github', owner: 'acme', repo: 'twinline' });
   assert.deepStrictEqual(feedFromUrl('https://updates.example.com/twinline/'), { provider: 'generic', url: 'https://updates.example.com/twinline' });
   assert.strictEqual(feedFromUrl(''), null);
-  assert.strictEqual(linuxManifestUrl(feedFromUrl('https://updates.example.com/twinline')), 'https://updates.example.com/twinline/latest-linux.yml');
-  assert.strictEqual(linuxManifestUrl(feedFromUrl('https://github.com/acme/twinline')), 'https://github.com/acme/twinline/releases/latest/download/latest-linux.yml');
+  assert.strictEqual(manifestUrl(feedFromUrl('https://updates.example.com/twinline'), 'latest-linux.yml'), 'https://updates.example.com/twinline/latest-linux.yml');
 });

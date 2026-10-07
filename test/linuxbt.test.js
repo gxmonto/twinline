@@ -95,7 +95,6 @@ test('without pactl the feature stays quiet', async () => {
     bt.update([{ state: 'connected' }]);
     await bt._busy;
     assert.strictEqual(bt.restore.size, 0);
-    assert.strictEqual(bt._missing, true);
   } finally {
     Object.defineProperty(process, 'platform', realPlatform);
   }

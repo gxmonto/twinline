@@ -65,15 +65,11 @@ const DEFAULT_SETTINGS = {
     ringVolume: 0.7,
   },
   behaviour: {
-    autoAnswerSeconds: 0,
     maxCalls: 4,
-    holdOnAnswer: true,
     minimiseToTray: true,
     startMinimised: false,
     mediaPortRange: [16384, 32766],
     incomingPopup: true,
-    // Where the user last dragged the incoming-call popup; null = centred.
-    popupPosition: null,
     // Record every SIP message in the log file (troubleshooting only).
     sipTrace: false,
     // Do not disturb: decline incoming calls as busy. Survives restarts on purpose.
@@ -115,10 +111,6 @@ class SettingsStore {
     this.file = path.join(dir, 'settings.json');
     this.crypto = crypto;
     this.data = null;
-  }
-
-  get encryptionAvailable() {
-    return this.encryptionBackend !== null;
   }
 
   /**
@@ -174,7 +166,7 @@ class SettingsStore {
 
   _encrypt(value) {
     if (!value) return '';
-    if (!this.encryptionAvailable) return value;
+    if (this.encryptionBackend === null) return value;
     try {
       return SECRET_PREFIX + this.crypto.encryptString(value).toString('base64');
     } catch {
@@ -202,7 +194,6 @@ class SettingsStore {
       account.hasPassword = !!account.password;
       account.password = account.password ? '••••••••' : '';
     }
-    copy.encryptionAvailable = this.encryptionAvailable;
     copy.encryptionBackend = this.encryptionBackend;
     return copy;
   }
