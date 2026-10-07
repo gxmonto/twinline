@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Bluetooth headsets on Windows: audio recovers after the headset idles off and comes back. Any audio device change now rebuilds the audio path, a stuck rebuild no longer blocks later ones, and audio repairs are written to the log.

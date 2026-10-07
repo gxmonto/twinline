@@ -256,8 +256,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   disables it. Parser + flow are unit-tested against pipewire-pulse output;
   not run on a real Fedora box here — ask Mike.
 - **Audio self-healing** (1.4.23, `RendererAudio`): `devicechange` (debounced
-  700 ms) → re-resolve devices (configured id if present, else default) and
-  rebuild if they differ from what is in use; mic track `ended`, or `mute`
+  700 ms) → rebuild, always (1.4.29: with "default" ids nothing "changed"
+  yet the graph was bound to the headset that idled off/on — Windows, Mike);
+  the rebuild is raced against 8 s and `context.close()` is not awaited (it
+  can hang on a vanished device and then `_recovering` never cleared);
+  repairs also go to the main log via `api.log.note` (`[renderer]` lines); mic track `ended`, or `mute`
   lasting 1.5 s → rebuild; context `interrupted`/`suspended` → resume, else
   rebuild; a watchdog rebuilds when an *enabled* mic posts no frame for
   2.5 s (a Bluetooth profile switch kills the track silently). Rebuilds are
