@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.30 — 2026-10-08
+
+- The microphone is now opened only while a call is live and released afterwards. On Linux this lets a Bluetooth headset return to high-quality music after a call (it stayed in call mode before); it also means TwinLine no longer holds the microphone while idle.
+
 ## 1.4.29 — 2026-10-07
 
 - Bluetooth headsets on Windows: audio recovers after the headset idles off and comes back. Any audio device change now rebuilds the audio path, a stuck rebuild no longer blocks later ones, and audio repairs are written to the log.
