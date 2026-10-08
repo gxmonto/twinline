@@ -245,6 +245,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `transcriptView` panel window from any panel or from the phone window with
   dialogs-as-windows on. Showing it as a sheet inside the History panel hid
   the History sheet (exclusive overlays) and the panel closed itself.
+- **Microphone only during a live call** (1.4.30): `audio.setMicrophoneWanted`
+  from the state handler (calling/ringing/connected; not incoming). An
+  always-open capture stream made WirePlumber keep a Bluetooth headset in
+  HFP after the call (our A2DP restore was overridden) — Mike, Fedora.
+  The watchdog is inert while no mic is open (`this.capture` null).
 - **Linux Bluetooth call profile** (1.4.27, `linuxbt.js`): PipeWire/Pulse
   only auto-switch A2DP→HFP when a capture stream targets the headset, and
   Chromium asks for "default", so under A2DP the far end heard nothing

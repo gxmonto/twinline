@@ -33,6 +33,7 @@ export class RendererAudio {
     /** Called with (message, kind) when a device vanished, came back, or audio was repaired. */
     this.onDeviceEvent = null;
     this.micEnabled = true;
+    this.micWanted = false;
     this.lastFrameAt = 0;
     this._active = { input: null, output: null };   // device ids actually in use
     this._recovering = null;
@@ -145,12 +146,18 @@ export class RendererAudio {
     this.playback.connect(this.context.destination);
     await this._applySink();
 
-    try {
-      await this._openMicrophone();
-    } catch (err) {
-      this.lastError = err;
-      // Keep going: the user can still hear the far end and fix the device
-      // in Settings. The main process sends silence in our place.
+    // The microphone is opened only while a call is live (setMicrophoneWanted).
+    // An always-open capture stream made PipeWire's WirePlumber hold a
+    // Bluetooth headset in its call profile for ever, so music never came
+    // back after a call (Mike, Fedora, 1.4.30). It is also simply polite.
+    if (this.micWanted) {
+      try {
+        await this._openMicrophone();
+      } catch (err) {
+        this.lastError = err;
+        // Keep going: the user can still hear the far end and fix the device
+        // in Settings. The main process sends silence in our place.
+      }
     }
 
     this.started = true;
@@ -217,14 +224,32 @@ export class RendererAudio {
     return this.start();
   }
 
+  /** Open the microphone for a call, or release it when none is live. */
+  async setMicrophoneWanted(wanted) {
+    this.micWanted = !!wanted;
+    if (!this.started) return;
+    if (this.micWanted && !this.stream && !this._openingMic) {
+      this._openingMic = true;
+      try { await this._openMicrophone(); } catch (err) { this.lastError = err; this._report(`Microphone unavailable: ${err.message}. You can still hear callers.`, 'warn'); }
+      this._openingMic = false;
+      if (!this.micWanted) this._closeMicrophone();      // the call ended while it was opening
+    } else if (!this.micWanted) {
+      this._closeMicrophone();
+    }
+  }
+
+  _closeMicrophone() {
+    if (this.stream) { for (const track of this.stream.getTracks()) track.stop(); this.stream = null; }
+    if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); this.capture = null; }
+    if (this.source) { this.source.disconnect(); this.source = null; }
+  }
+
   async stop() {
     clearInterval(this._watchdog);
     this._watchdog = null;
     if (this.context) this.context.onstatechange = null;
     this.stopRinging();
-    if (this.stream) { for (const track of this.stream.getTracks()) track.stop(); this.stream = null; }
-    if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); this.capture = null; }
-    if (this.source) { this.source.disconnect(); this.source = null; }
+    this._closeMicrophone();
     if (this.playback) { this.playback.disconnect(); this.playback = null; }
     if (this.ringContext === this.context) this.ringContext = null;   // shared; closes below
     if (this.context) { this.context.close().catch(() => {}); this.context = null; }   // not awaited: close() can hang on a vanished device
