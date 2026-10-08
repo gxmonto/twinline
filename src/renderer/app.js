@@ -123,9 +123,6 @@ async function startAudio() {
     await audio.start();
     audio.onFrame = (frame) => api.audio.sendMicFrame(frame);
     devices = await RendererAudio.devices();
-    if (audio.lastError) {
-      toast(`Microphone unavailable: ${audio.lastError.message}. You can still hear callers.`, 'warn');
-    }
     renderSettingsAudio();
   } catch (err) {
     toast(`Audio failed to start: ${err.message}`, 'error');
@@ -142,6 +139,8 @@ function wireEvents() {
     state = snapshot;
     renderAll();
     updateRingtone();
+    // Microphone only while a call is live; an unanswered incoming ring does not need it.
+    if (!PANEL) audio.setMicrophoneWanted(snapshot.calls.some((c) => ['calling', 'ringing', 'connected'].includes(c.state)));
   });
   // Settings saved in any window; contacts edited in any window.
   api.on.settings((s) => { settings = s; if (!$('settingsOverlay').classList.contains('hidden') && !PANEL) renderSettingsAccounts(); });

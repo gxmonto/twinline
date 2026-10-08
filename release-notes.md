@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- The microphone is now opened only while a call is live and released afterwards. On Linux this lets a Bluetooth headset return to high-quality music after a call (it stayed in call mode before); it also means TwinLine no longer holds the microphone while idle.
