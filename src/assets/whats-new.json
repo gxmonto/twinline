@@ -1,5 +1,5 @@
 {
-  "version": "1.4.30",
-  "date": "2026-10-08",
-  "notes": "- The microphone is now opened only while a call is live and released afterwards. On Linux this lets a Bluetooth headset return to high-quality music after a call (it stayed in call mode before); it also means TwinLine no longer holds the microphone while idle."
+  "version": "1.4.31",
+  "date": "2026-10-09",
+  "notes": "- Mute is now a microphone icon on each call card instead of a button under the keypad.\n- New option under Settings → Behaviour: say \"muted\" out loud (to you only, never into the call) whenever you mute."
 }
