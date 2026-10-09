@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS = {
     // Linux only: switch Bluetooth headsets to their headset (microphone)
     // profile while a call is up and back to high-quality music afterwards.
     bluetoothCallProfile: true,
+    announceMute: false,           // say "muted" to the local speaker on mute
     // The version whose "What's new" the user dismissed with "don't show again".
     whatsNewSeen: '',
   },

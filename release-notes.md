@@ -1,1 +1,2 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Mute is now a microphone icon on each call card instead of a button under the keypad.
+- New option under Settings → Behaviour: say "muted" out loud (to you only, never into the call) whenever you mute.
