@@ -87,7 +87,6 @@
     </div>
 
     <div class="dial-tools">
-      <button class="btn ghost small" id="btnMute">Mute</button>
       <button class="btn ghost small" id="btnDnd" title="Do not disturb: decline incoming calls as busy">DND</button>
       <button class="btn ghost small" id="btnKeypad">Hide keypad</button>
       <div class="meter" title="Microphone level"><div class="meter-fill" id="micMeter"></div></div>
@@ -193,6 +192,7 @@
           <label class="check"><input type="checkbox" id="incomingPopup"> Show a popup for incoming calls</label>
           <label class="check"><input type="checkbox" id="dialogWindows"> Open Settings, History and Contacts in their own windows</label>
           <label class="check"><input type="checkbox" id="hardwareAcceleration"> Use GPU acceleration for the interface (uses ~100 MB more memory; takes effect after a restart)</label>
+          <label class="check"><input type="checkbox" id="announceMute"> Say "muted" out loud (to you only, not into the call) when you mute</label>
           <label class="check"><input type="checkbox" id="bluetoothCallProfile"> Linux: switch Bluetooth headsets to call mode (microphone on) during calls and back to high-quality music afterwards</label>
           <label class="field">
             <span>Incoming-call popup position</span>

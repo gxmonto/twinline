@@ -261,7 +261,6 @@ function wireEvents() {
   $('dialInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') dial();
   });
-  $('btnMute').onclick = toggleMute;
   $('btnDnd').onclick = toggleDnd;
   $('btnWhatsNew').onclick = async () => { const wn = await guard(api.whatsNew.get()); if (wn) showWhatsNew(wn, { manual: true }); else toast('No release notes are bundled with this build'); };
   $('btnWhatsNewClose').onclick = () => $('whatsNewOverlay').classList.add('hidden');
@@ -356,8 +355,6 @@ function renderAll() {
   renderAccountSelect();
   renderCalls();
   renderConference();
-  $('btnMute').classList.toggle('active', !!state.muted);
-  $('btnMute').textContent = state.muted ? 'Unmute' : 'Mute';
   $('btnDnd').classList.toggle('active', !!state.dnd);
   $('btnDnd').title = state.dnd ? 'Do not disturb is on: incoming calls are declined as busy' : 'Do not disturb: decline incoming calls as busy';
 }
@@ -464,6 +461,11 @@ function statusTag(call) {
   return `<span class="tag">${esc(call.state)}</span>`;
 }
 
+/** One microphone, so the icon shows the same state on every card. */
+function muteButton(id) {
+  return `<button class="btn ghost small icon-only${state.muted ? ' active' : ''}" data-action="mute" data-call="${id}" title="${state.muted ? 'Unmute microphone' : 'Mute microphone'}" aria-label="Mute">${state.muted ? '&#128263;' : '&#127908;'}</button>`;
+}
+
 function callButtons(call, connectedCount, conferenceRunning) {
   const id = esc(call.id);
   const b = (action, label, cls = 'btn small') =>
@@ -484,10 +486,12 @@ function callButtons(call, connectedCount, conferenceRunning) {
     parts.push(call.localHold
       ? b('confResume', 'Resume', 'btn small active')
       : b('confHold', 'Hold', 'btn ghost small'));
+    parts.push(muteButton(id));
     parts.push(b('hangup', 'Drop', 'btn danger small'));
     return parts.join('');
   }
 
+  parts.push(muteButton(id));
   parts.push(call.localHold ? b('unhold', 'Resume', 'btn small active') : b('hold', 'Hold', 'btn small'));
 
   if (conferenceRunning) parts.push(b('confAdd', 'Join conf', 'btn small'));
@@ -593,6 +597,7 @@ function onCallAction(action, callId) {
     case 'answer': return guard(api.call.answer(callId));
     case 'reject': return guard(api.call.reject(callId, 486));
     case 'hangup': return guard(api.call.hangup(callId));
+    case 'mute': return toggleMute();
     case 'hold': return guard(api.call.hold(callId));
     case 'unhold': return guard(api.call.unhold(callId));
     case 'conference': return guard(api.conference.start(null));
@@ -637,6 +642,12 @@ async function toggleMute() {
     state.muted = result.muted;
     audio.setMicrophoneEnabled(!result.muted);
     renderAll();
+    // Spoken to the local speaker only: the mic is already off, so nothing of
+    // it reaches the call. Unmute says nothing — an open mic would pick it up.
+    if (result.muted && settings && settings.behaviour.announceMute && 'speechSynthesis' in window) {
+      speechSynthesis.cancel();
+      speechSynthesis.speak(new SpeechSynthesisUtterance('muted'));
+    }
   }
 }
 
@@ -887,6 +898,7 @@ function renderSettingsGeneral() {
   $('dialogWindows').checked = settings.behaviour.dialogWindows !== false;
   $('hardwareAcceleration').checked = !!settings.behaviour.hardwareAcceleration;
   $('bluetoothCallProfile').checked = settings.behaviour.bluetoothCallProfile !== false;
+  $('announceMute').checked = !!settings.behaviour.announceMute;
   $('sipTrace').checked = !!settings.behaviour.sipTrace;
   $('updateMode').value = (settings.updates && settings.updates.mode) || 'ask';
   $('updateUrl').value = (settings.updates && settings.updates.url) || '';
@@ -957,6 +969,7 @@ async function saveSettings() {
   next.behaviour.dialogWindows = $('dialogWindows').checked;
   next.behaviour.hardwareAcceleration = $('hardwareAcceleration').checked;
   next.behaviour.bluetoothCallProfile = $('bluetoothCallProfile').checked;
+  next.behaviour.announceMute = $('announceMute').checked;
   next.behaviour.sipTrace = $('sipTrace').checked;
   next.updates = { mode: $('updateMode').value, url: $('updateUrl').value.trim() };
   next.transcription = {
