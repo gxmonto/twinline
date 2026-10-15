@@ -265,7 +265,11 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   yet the graph was bound to the headset that idled off/on — Windows, Mike);
   the rebuild is raced against 8 s and `context.close()` is not awaited (it
   can hang on a vanished device and then `_recovering` never cleared);
-  repairs also go to the main log via `api.log.note` (`[renderer]` lines); mic track `ended`, or `mute`
+  repairs also go to the main log via `api.log.note` (`[renderer]` lines);
+  after a rebuild that fell back to the default device, `_waitForPreferred`
+  polls `enumerateDevices` every 3 s for 2 min and rebuilds when the chosen
+  device is listed again (1.4.32: Windows lists a returning headset seconds
+  after the last devicechange, so the fallback stuck); mic track `ended`, or `mute`
   lasting 1.5 s → rebuild; context `interrupted`/`suspended` → resume, else
   rebuild; a watchdog rebuilds when an *enabled* mic posts no frame for
   2.5 s (a Bluetooth profile switch kills the track silently). Rebuilds are

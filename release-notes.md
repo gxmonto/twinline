@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Bluetooth headsets on Windows: when the headset comes back after a drop, TwinLine now returns to it within a few seconds instead of staying on the laptop's speaker and microphone until the next device change.
