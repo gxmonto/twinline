@@ -89,9 +89,15 @@ export class RendererAudio {
     this._lastRecoverAt = Date.now();
     this._recovering = (async () => {
       try {
+        this._active.fallbackNote = null;
         await Promise.race([this.restart(), new Promise((_, rej) => setTimeout(() => rej(new Error('rebuild timed out')), 8000))]);
         const note = this._active.fallbackNote;
         this._report(note ? `Audio reconnected (${reason}); ${note}` : `Audio reconnected (${reason})`, note ? 'warn' : '');
+        // Windows lists a returning Bluetooth headset a few seconds *after*
+        // the last devicechange, so a rebuild during that window falls back to
+        // the system default and nothing ever moves us back (user log,
+        // 2026-10-14). Poll for the chosen device for a while.
+        if (note) this._waitForPreferred();
       } catch (err) {
         this._report(`Audio could not be restarted (${reason}): ${err.message}`, 'error');
       } finally {
@@ -99,6 +105,19 @@ export class RendererAudio {
       }
     })();
     return this._recovering;
+  }
+
+  _waitForPreferred() {
+    clearInterval(this._preferredPoll);
+    const until = Date.now() + 120000;
+    this._preferredPoll = setInterval(async () => {
+      if (!this.started || Date.now() > until) { clearInterval(this._preferredPoll); return; }
+      const want = await this._resolveDevices();
+      if (!want.inputFellBack && !want.outputFellBack) {
+        clearInterval(this._preferredPoll);
+        this._recover('chosen device is back');
+      }
+    }, 3000);
   }
 
   _report(message, kind = '') {
@@ -246,6 +265,7 @@ export class RendererAudio {
 
   async stop() {
     clearInterval(this._watchdog);
+    clearInterval(this._preferredPoll);
     this._watchdog = null;
     if (this.context) this.context.onstatechange = null;
     this.stopRinging();
