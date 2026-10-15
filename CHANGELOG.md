@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.32 — 2026-10-15
+
+- Bluetooth headsets on Windows: when the headset comes back after a drop, TwinLine now returns to it within a few seconds instead of staying on the laptop's speaker and microphone until the next device change.
+
 ## 1.4.31 — 2026-10-09
 
 - Mute is now a microphone icon on each call card instead of a button under the keypad.
