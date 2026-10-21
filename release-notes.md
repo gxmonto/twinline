@@ -1,1 +1,1 @@
-- Call history has a search box: filter by name or number as you type.
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
