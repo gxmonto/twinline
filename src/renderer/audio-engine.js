@@ -186,21 +186,26 @@ export class RendererAudio {
   }
 
   async _openMicrophone() {
-    const { echoCancellation, noiseSuppression, autoGainControl } = this.settings;
-    const want = await this._resolveDevices();
-    const inputDeviceId = want.input;
-    this._active.input = inputDeviceId;
-    this._active.fallbackNote = want.inputFellBack ? 'the chosen microphone is not connected, using the system default' : null;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: inputDeviceId && inputDeviceId !== 'default' ? { exact: inputDeviceId } : undefined,
-        echoCancellation,
-        noiseSuppression,
-        autoGainControl,
-        channelCount: 1,
-      },
+    const { echoCancellation, noiseSuppression, autoGainControl, inputDeviceId } = this.settings;
+    // Ask for the chosen device outright and fall back only if the OS refuses.
+    // Deciding from enumerateDevices() was wrong before the first getUserMedia
+    // of a session: Chromium then lists only placeholder devices, so the
+    // chosen headset looked "not connected" and audio went to the laptop
+    // (Windows, since the mic stopped opening at start-up in 1.4.30).
+    const open = (deviceId) => navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation, noiseSuppression, autoGainControl, channelCount: 1 },
       video: false,
     });
+    const chosen = inputDeviceId && inputDeviceId !== 'default' ? inputDeviceId : null;
+    try {
+      this.stream = await open(chosen);
+      this._active.input = chosen || 'default';
+    } catch (err) {
+      if (!chosen) throw err;
+      this.stream = await open(null);
+      this._active.input = 'default';
+      this._active.fallbackNote = 'the chosen microphone is not connected, using the system default';
+    }
 
     this.source = this.context.createMediaStreamSource(this.stream);
     this.capture = new AudioWorkletNode(this.context, 'capture-processor', {
@@ -223,17 +228,16 @@ export class RendererAudio {
   }
 
   async _applySink() {
-    const want = await this._resolveDevices();
-    const id = want.output;
-    this._active.output = id;
-    if (want.outputFellBack) {
-      this._active.fallbackNote = [this._active.fallbackNote, 'the chosen speaker is not connected, using the system default'].filter(Boolean).join('; ');
-    }
-    if (!id || id === 'default') return;
+    const id = this.settings.outputDeviceId;
+    this._active.output = 'default';
+    if (!id || id === 'default' || typeof this.context.setSinkId !== 'function') return;
     try {
-      if (typeof this.context.setSinkId === 'function') await this.context.setSinkId(id);
+      await this.context.setSinkId(id);
+      this._active.output = id;
     } catch (err) {
+      // Not connected (or not known yet): the context stays on the system default.
       this.lastError = err;
+      this._active.fallbackNote = [this._active.fallbackNote, 'the chosen speaker is not connected, using the system default'].filter(Boolean).join('; ');
     }
   }
 

@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- The speaker and microphone chosen in Settings are used from the first start again. Since 1.4.30 the app could decide the chosen headset was "not connected" before it had ever opened the microphone and send call audio to the system speakers instead.
