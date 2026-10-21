@@ -206,6 +206,7 @@ function wireEvents() {
   $('btnContactCancel').onclick = hideContactForm;
   $('contactForm').addEventListener('submit', saveContact);
   $('contactSearch').addEventListener('input', renderContacts);
+  $('historySearch').addEventListener('input', openHistory);
   $('btnContactsImport').onclick = importContacts;
   for (const button of document.querySelectorAll('button[data-export]')) {
     button.onclick = () => exportContacts(button.dataset.export);
@@ -726,7 +727,9 @@ async function openHistory() {
   // In the phone window the dialogs open as their own windows (1.4.15): the
   // in-window sheets clipped their close button at the minimum window size.
   if (!PANEL && dialogsAsWindows()) return guard(api.window.openPanel('history'));
-  const history = await api.state.history();
+  const all = await api.state.history();
+  const q = $('historySearch').value.trim().toLowerCase();
+  const history = q ? all.filter((h) => [h.contactName, h.remoteName, h.remoteNumber].some((v) => v && String(v).toLowerCase().includes(q))) : all;
   $('historyList').innerHTML = history.length
     ? history.map((h) => {
         const cls = h.missed ? 'missed' : h.direction === 'out' ? 'out' : 'in';
@@ -740,7 +743,7 @@ async function openHistory() {
           <button class="btn ghost small redial" data-redial="${esc(h.remoteNumber)}">Call</button>
         </li>`;
       }).join('')
-    : '<li><span class="who">No calls yet.</span></li>';
+    : `<li><span class="who">${q ? 'No matches.' : 'No calls yet.'}</span></li>`;
 
   for (const button of $('historyList').querySelectorAll('button[data-redial]')) {
     button.onclick = () => {
