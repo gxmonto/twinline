@@ -245,6 +245,13 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   `transcriptView` panel window from any panel or from the phone window with
   dialogs-as-windows on. Showing it as a sheet inside the History panel hid
   the History sheet (exclusive overlays) and the panel closed itself.
+- **Devices: try the chosen id, fall back on refusal** (1.4.35). Never decide
+  presence from `enumerateDevices()` before the session's first getUserMedia:
+  Chromium lists placeholders then, so the chosen headset looked absent and
+  the sink stayed on the laptop speakers (Windows, after 1.4.30 stopped
+  opening the mic at start). `_applySink` calls `setSinkId` and notes a
+  fallback only when it rejects; `_openMicrophone` tries `exact` then
+  default. `_resolveDevices` remains for the return-to-preferred poll only.
 - **Microphone only during a live call** (1.4.30): `audio.setMicrophoneWanted`
   from the state handler (calling/ringing/connected; not incoming). An
   always-open capture stream made WirePlumber keep a Bluetooth headset in
