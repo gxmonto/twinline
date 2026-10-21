@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.35 — 2026-10-21
+
+- The speaker and microphone chosen in Settings are used from the first start again. Since 1.4.30 the app could decide the chosen headset was "not connected" before it had ever opened the microphone and send call audio to the system speakers instead.
+
 ## 1.4.34 — 2026-10-21
 
 - The spoken "muted" cue uses a female voice where the system has one, a touch slower and softer.
