@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- The spoken "muted" cue uses a female voice where the system has one, a touch slower and softer.
