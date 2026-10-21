@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.34 — 2026-10-21
+
+- The spoken "muted" cue uses a female voice where the system has one, a touch slower and softer.
+
 ## 1.4.33 — 2026-10-21
 
 - Call history has a search box: filter by name or number as you type.

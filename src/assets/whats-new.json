@@ -1,5 +1,5 @@
 {
-  "version": "1.4.33",
+  "version": "1.4.34",
   "date": "2026-10-21",
-  "notes": "- Call history has a search box: filter by name or number as you type."
+  "notes": "- The spoken \"muted\" cue uses a female voice where the system has one, a touch slower and softer."
 }
