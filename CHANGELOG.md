@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.33 — 2026-10-21
+
+- Call history has a search box: filter by name or number as you type.
+
 ## 1.4.32 — 2026-10-15
 
 - Bluetooth headsets on Windows: when the headset comes back after a drop, TwinLine now returns to it within a few seconds instead of staying on the laptop's speaker and microphone until the next device change.
