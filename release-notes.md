@@ -1,1 +1,1 @@
-- Outgoing calls that ring for more than 32 seconds no longer drop with "No response from server". TwinLine was giving up on its own while the far end was still ringing; when they then answered, the provider saw a call nobody acknowledged ("No ACK timeout").
+<!-- Describe what changed in the next release. Shown to users in the update banner. -->
