@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.36 — 2026-10-23
+
+- Outgoing calls that ring for more than 32 seconds no longer drop with "No response from server". TwinLine was giving up on its own while the far end was still ringing; when they then answered, the provider saw a call nobody acknowledged ("No ACK timeout").
+
 ## 1.4.35 — 2026-10-21
 
 - The speaker and microphone chosen in Settings are used from the first start again. Since 1.4.30 the app could decide the chosen headset was "not connected" before it had ever opened the microphone and send call audio to the system speakers instead.
