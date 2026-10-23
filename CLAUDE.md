@@ -121,6 +121,14 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   answered with anything but sendrecv is offered once more (800 ms), then a
   warning toast names the direction they answered. Every SDP applied is
   logged as `sdp <role>` with offered/concluded — ask for those lines.
+- **Resume is optimistic** (1.4.37): `unhold()` sets remoteDirection
+  sendrecv / remoteUnspecified false before the re-INVITE, so audio flows to
+  the last known address at once; the answer corrects it. Mike's conference
+  (2026-10-20, 1.4.32): first party held, second dialled, Conference pressed
+  — no re-INVITE answer, no warning, nothing logged, first party heard
+  nothing until the second hung up. Cause unproven (the un-hold never
+  completed; `conference()` swallowed it). Now `hold`/`resume`/`conference`
+  and every `re-INVITE answered`/`failed` are logged — ask for those lines.
 - **Timer B stops on the first provisional** (1.4.36, `ClientTransaction`):
   RFC 3261 §17.1.1.2 — Timer B guards only the Calling state. It ran on, so
   every outgoing call that rang > 32 s died with 408 "No response from

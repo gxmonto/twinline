@@ -858,6 +858,7 @@ class Call extends EventEmitter {
 
   async hold() {
     if (this.state !== 'connected' || this.localHold) return;
+    this.ua.log.info('hold', { call: this.id.slice(0, 8) });
     this.localHold = true;
     this._applyMediaFlow();
     this.emit('update');
@@ -866,7 +867,16 @@ class Call extends EventEmitter {
 
   async unhold() {
     if (this.state !== 'connected' || !this.localHold) return;
+    this.ua.log.info('resume', { call: this.id.slice(0, 8) });
     this.localHold = false;
+    // Optimistic: send to the last known address right away. The hold answer
+    // left remoteDirection 'inactive' / c=0.0.0.0, and until the resume
+    // answer arrives that gate kept us silent — when the re-INVITE went
+    // missing (Mike's conference, 2026-10-20) the first party heard nothing
+    // for five minutes. The answer corrects the state when it comes.
+    this.remoteDirection = 'sendrecv';
+    this.remoteUnspecified = false;
+    this.remoteHold = false;
     this._applyMediaFlow();
     this.emit('update');
     await this._reinvite();
@@ -887,12 +897,13 @@ class Call extends EventEmitter {
   /** Send a re-INVITE carrying the current local SDP. */
   async _reinvite() {
     if (this.state !== 'connected') return;
-    this.localSdpVersion += 1;
-    const request = this._buildInDialogRequest('INVITE', { body: this._buildSdp() });
-    request.headers.allow = [this.ua.allowHeader()];
-
     try {
+      this.localSdpVersion += 1;
+      const request = this._buildInDialogRequest('INVITE', { body: this._buildSdp() });
+      request.headers.allow = [this.ua.allowHeader()];
       const response = await this.ua.sendInviteWithAuth(request, this.ua.target, this);
+      // Every outcome is logged: a resume that silently went nowhere cost a conference.
+      this.ua.log.info('re-INVITE answered', { call: this.id.slice(0, 8), status: response.status, sdp: !!response.body });
       if (response.status === 491) {
         // Glare: both sides re-INVITEd. Back off and retry (§14.1).
         const delay = 2100 + Math.random() * 1900;
@@ -910,6 +921,7 @@ class Call extends EventEmitter {
         this.emit('warning', `Hold failed for ${this.remoteNumber}: ${response.status} ${response.reason}`);
       }
     } catch (err) {
+      this.ua.log.warn('re-INVITE failed', { call: this.id.slice(0, 8), error: err.message });
       this.emit('warning', `Hold failed for ${this.remoteNumber}: ${err.message}`);
     }
   }

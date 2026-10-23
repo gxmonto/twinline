@@ -1,1 +1,1 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Conference: when a held call is brought into a conference it now hears you immediately, even if the provider is slow or fails to confirm the resume. Hold, resume and conference steps are written to the log.
