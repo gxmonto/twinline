@@ -305,7 +305,8 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   on a Ryzen 7 5800U). Whisper stays selectable but was 5–10 s per utterance
   on Mike's i7 laptop and mislabelled Spanish as Portuguese/Hindi/Thai (its
   encoder always processes 30 s; its language ID is unreliable on short 8 kHz
-  snippets). Saved Whisper picks migrate once (`config.js migrate()`).
+  snippets). The one-time Whisper→Parakeet settings migration was removed
+  on the cleanup branch (every installed copy is on 1.4.x).
 - **Electron forbids N-API external buffers**: sherpa-onnx's `resample()` and
   `vad.front()` throw `External buffers are not allowed` inside Electron but
   not in Node — the worker caught it per frame and simply "heard nothing".

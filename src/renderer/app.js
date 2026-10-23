@@ -988,7 +988,6 @@ async function saveSettings() {
     language: $('trLanguage').value,
     autoStart: $('trAutoStart').checked,
     threads: $('trThreads').value ? Math.max(1, Math.min(16, Number($('trThreads').value) || 0)) : 0,
-    catalogVersion: (settings.transcription && settings.transcription.catalogVersion) || 0,
   };
 
   const saved = await guard(api.settings.save(next));

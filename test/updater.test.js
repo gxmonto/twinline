@@ -11,7 +11,7 @@ Module._load = function (request, ...rest) {
   }
   return realLoad.call(this, request, ...rest);
 };
-const { compareVersions, parseLatestYml, feedFromUrl, manifestUrl, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl } = require('../src/main/updater');
+const { parseLatestYml, feedFromUrl, manifestUrl, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl } = require('../src/main/updater');
 Module._load = realLoad;
 
 test('the Windows portable exe is sent to the new portable file, not the installer', () => {
@@ -53,15 +53,6 @@ test('the package manager that owns the install is asked first, the distro famil
     if (savedAppImage === undefined) delete process.env.APPIMAGE; else process.env.APPIMAGE = savedAppImage;
     Object.defineProperty(process, 'platform', realPlatform);
   }
-});
-
-test('version comparison', () => {
-  assert.ok(compareVersions('1.0.4', '1.0.3') > 0);
-  assert.ok(compareVersions('1.0.10', '1.0.9') > 0, 'numeric, not lexical');
-  assert.ok(compareVersions('1.1.0', '1.0.99') > 0);
-  assert.strictEqual(compareVersions('v2.0.0', '2.0.0'), 0);
-  assert.ok(compareVersions('2.0.0-beta.1', '2.0.0') < 0, 'pre-release precedes release');
-  assert.ok(compareVersions('2.0.0', '1.9.9-rc') > 0);
 });
 
 test('parses the manifest electron-builder writes', () => {

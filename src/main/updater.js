@@ -29,23 +29,6 @@ const { isLocalNetwork, followRedirect } = require('./urlpolicy');
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 30 * 1000;
 
-/** Compare dotted versions with optional pre-release; negative if a < b. */
-function compareVersions(a, b) {
-  const parse = (v) => {
-    const [core, pre] = String(v).trim().replace(/^v/, '').split('-');
-    return { nums: core.split('.').map((n) => parseInt(n, 10) || 0), pre: pre || null };
-  };
-  const x = parse(a), y = parse(b);
-  for (let i = 0; i < Math.max(x.nums.length, y.nums.length); i++) {
-    const d = (x.nums[i] || 0) - (y.nums[i] || 0);
-    if (d) return d;
-  }
-  // A pre-release sorts before the plain release of the same numbers.
-  if (x.pre && !y.pre) return -1;
-  if (!x.pre && y.pre) return 1;
-  return String(x.pre || '').localeCompare(String(y.pre || ''));
-}
-
 /** The handful of fields we need from electron-builder's latest*.yml. */
 function parseLatestYml(text) {
   const out = { files: [] };
@@ -328,7 +311,7 @@ class Updater extends EventEmitter {
 
     // Any *different* published version is the one to move to — see
     // allowDowngrade above: the 1.4.x → 1.0.0 renumbering is a downgrade.
-    if (compareVersions(manifest.version, app.getVersion()) === 0) {
+    if (String(manifest.version).trim().replace(/^v/, '') === app.getVersion()) {
       this._set({ state: 'up-to-date', version: manifest.version });
       return;
     }
@@ -457,4 +440,4 @@ function friendlyError(err) {
   return m.length > 160 ? m.slice(0, 157) + '…' : m;
 }
 
-module.exports = { Updater, compareVersions, parseLatestYml, feedFromUrl, manifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl };
+module.exports = { Updater, parseLatestYml, feedFromUrl, manifestUrl, isLocalNetwork, fetchText, linuxPackageKind, linuxDownloadUrl, portableDownloadUrl };
