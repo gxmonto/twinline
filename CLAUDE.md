@@ -121,6 +121,12 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   answered with anything but sendrecv is offered once more (800 ms), then a
   warning toast names the direction they answered. Every SDP applied is
   logged as `sdp <role>` with offered/concluded — ask for those lines.
+- **Timer B stops on the first provisional** (1.4.36, `ClientTransaction`):
+  RFC 3261 §17.1.1.2 — Timer B guards only the Calling state. It ran on, so
+  every outgoing call that rang > 32 s died with 408 "No response from
+  server"; the callee then answered a torn-down transaction and JetWave
+  logged "No ACK timeout" (Mike, 2026-10-23; MicroSIP waited fine). Timer F
+  for non-INVITE stays. Ringing is bounded by `RING_TIMEOUT_MS` instead.
 - **Incoming INVITE is registered before its media is bound** (1.4.22):
   `handleInitialInvite` calls `registerDialog` + sends 100 Trying *before*
   `await _ensureMedia()`. A CANCEL during the bind used to find no dialog

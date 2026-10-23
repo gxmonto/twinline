@@ -100,6 +100,15 @@ class ClientTransaction extends EventEmitter {
       if (this.state === 'trying' || this.state === 'proceeding') {
         this.state = 'proceeding';
         clearTimeout(this.timers.retransmit);   // Timer A stops on provisional
+        if (this.isInvite) {
+          // Timer B only guards the Calling state (§17.1.1.2). Left running,
+          // it killed every call that rang longer than 32 s with a 408 — the
+          // callee then answered a transaction we had torn down, and JetWave
+          // logged "No ACK timeout" (Mike, 2026-10-23). Ringing has its own
+          // ceiling in Call (RING_TIMEOUT_MS).
+          clearTimeout(this.timers.timeout);
+          this.timers.timeout = null;
+        }
         this.emit('provisional', response);
       }
       return;
