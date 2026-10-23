@@ -445,7 +445,12 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   (`Start-Process "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"`, ~20 s).
 - `gh` is installed per-user at `%LOCALAPPDATA%\Programs\gh\bin` (on the user
   PATH; Bash sessions need `export PATH="$PATH:$LOCALAPPDATA/Programs/gh/bin"`),
-  authenticated as `gxmonto`.
+  authenticated as `gxmonto` (a second `mikebord` account is also logged in).
+  Windows Credential Manager started handing git a `mikebord` token
+  (2026-10-23: push → 403 "Permission denied to mikebord"; the release script
+  had already committed and tagged). This repo's `.git/config` therefore sets
+  `credential.helper = !gh auth git-credential`. If a release push fails,
+  `git push origin main && git push origin v<x.y.z>` by hand finishes it.
 - Installing into `C:\Program Files` needs a UAC prompt Claude cannot answer;
   ask Mike to run installers. His PC once ended up with a bogus "1.0.5" from
   the updater accident; he was told to reinstall from GitHub.
