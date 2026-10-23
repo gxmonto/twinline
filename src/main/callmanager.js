@@ -468,11 +468,14 @@ class CallManager extends EventEmitter {
     if (calls.length < 2) throw new Error('need at least two connected calls to conference');
 
     this.conferenceIds = new Set(calls.map((c) => c.id));
+    log.info('conference', { members: calls.map((c) => ({ call: c.id.slice(0, 8), held: c.localHold })) });
     this._syncConference();
 
     // Non-members lose the ear; members all come off hold.
     await this._holdEverythingAudible({ except: calls[0].id });
-    await Promise.all(calls.map((c) => (c.localHold ? c.unhold().catch(() => {}) : null)));
+    await Promise.all(calls.map((c) => (c.localHold
+      ? c.unhold().catch((err) => log.error('conference: resume failed', { call: c.id.slice(0, 8), error: err.message }))
+      : null)));
 
     this._syncConference();
     // One conference, one transcript: fold any per-call transcripts together.
