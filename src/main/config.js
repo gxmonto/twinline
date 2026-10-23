@@ -96,9 +96,6 @@ const DEFAULT_SETTINGS = {
     language: 'auto',      // Whisper only; Parakeet handles language itself
     autoStart: false,      // transcribe every call without asking
     threads: 0,            // 0 = choose from the CPU count
-    // Bumped when the recommended engine changes; settings saved before the
-    // bump are moved to the new default once (see migrate()).
-    catalogVersion: 0,
   },
 };
 
@@ -147,7 +144,6 @@ class SettingsStore {
     for (const account of this.data.accounts) {
       account.password = this._decrypt(account.password);
     }
-    if (migrate(this.data)) this.save();
     return this.data;
   }
 
@@ -217,28 +213,6 @@ class SettingsStore {
   }
 }
 
-const TRANSCRIPTION_CATALOG_VERSION = 2;
-
-/**
- * One-time adjustments to settings written by older versions.
- * Returns true when something changed and the file should be rewritten.
- */
-function migrate(data) {
-  let changed = false;
-  const t = data.transcription;
-  if (t && (t.catalogVersion || 0) < TRANSCRIPTION_CATALOG_VERSION) {
-    // 1.1.0 shipped Whisper as the engine; 1.2.0 replaced the recommendation
-    // with Parakeet (faster, steadier language handling). Anyone still on a
-    // Whisper pick chose it before Parakeet existed, so move them over; the
-    // Whisper models stay selectable for those who want them back.
-    if (['base', 'small', 'medium'].includes(t.model)) t.model = 'parakeet';
-    delete t.consentTone;
-    t.catalogVersion = TRANSCRIPTION_CATALOG_VERSION;
-    changed = true;
-  }
-  return changed;
-}
-
 /** Deep-merge `value` over `defaults`, keeping the defaults' shape. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -257,4 +231,4 @@ function mergeDefaults(value, defaults) {
   return value === undefined ? defaults : value;
 }
 
-module.exports = { SettingsStore, DEFAULT_SETTINGS, defaultAccount, mergeDefaults, migrate, TRANSCRIPTION_CATALOG_VERSION };
+module.exports = { SettingsStore, DEFAULT_SETTINGS, defaultAccount, mergeDefaults };

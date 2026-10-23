@@ -182,21 +182,6 @@ test('model store knows what is installed and where', () => {
   assert.throws(() => ModelStore.entry('gigantic'));
 });
 
-test('old Whisper settings migrate to Parakeet once', () => {
-  const { migrate, TRANSCRIPTION_CATALOG_VERSION } = require('../src/main/config');
-  const data = { transcription: { model: 'medium', consentTone: true, autoStart: true } };
-  assert.strictEqual(migrate(data), true);
-  assert.strictEqual(data.transcription.model, 'parakeet');
-  assert.strictEqual(data.transcription.autoStart, true, 'other choices are kept');
-  assert.strictEqual('consentTone' in data.transcription, false);
-  assert.strictEqual(data.transcription.catalogVersion, TRANSCRIPTION_CATALOG_VERSION);
-  assert.strictEqual(migrate(data), false, 'runs only once');
-  // A user who deliberately picks Whisper afterwards is left alone.
-  data.transcription.model = 'small';
-  assert.strictEqual(migrate(data), false);
-  assert.strictEqual(data.transcription.model, 'small');
-});
-
 test('mixer exposes per-party audio for taps and plays a queued tone to both sides', () => {
   const mixer = new AudioMixer();
   const remote = { pullFrame: () => new Int16Array(160).fill(300), sent: [], sendFrame(p) { this.sent.push(p ? p.slice() : null); } };
