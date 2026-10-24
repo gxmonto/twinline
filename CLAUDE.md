@@ -1,8 +1,8 @@
 # TwinLine — notes for Claude Code
 
 Dual-line SIP softphone (Electron, plain JavaScript, no framework, no build
-step). Owner: Mike (GitHub `gxmonto`, git author "mikebord", mike@sightwatch.com).
-Users are real: JetWave and Vital SIP accounts, Windows day to day, Linux
+step). Owner: Mike (GitHub `gxmonto`, git author "Mike Borden", mike@sightwatch.com).
+Users are real: two commercial SIP providers' accounts, Windows day to day, Linux
 packages too. Ship carefully; every release reaches installed copies through
 the built-in updater within hours.
 
@@ -103,7 +103,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   expects a stream and NAT bindings stay open. `a=sendonly` *from* the peer
   means they hold us (they may still send MoH; we keep receiving). Their
   `a=recvonly` answer to our hold is compliance, not a hold. `c=IN IP4 0.0.0.0`
-  is legacy hold, never a destination (Vital sends it; caused `EADDRNOTAVAIL 0.0.0.0`).
+  is legacy hold, never a destination (one provider sends it; caused `EADDRNOTAVAIL 0.0.0.0`).
   Rules since 1.4.12 (Mike lost a conference: after any resume the other
   side could not hear him and showed "held by peer" until he transferred):
   *offers* carry only our intent (`_localDirection`: sendonly while we hold,
@@ -117,7 +117,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   alive, whatever they claim about receiving — including `c=0.0.0.0` in an
   *answer* (1.4.13: the RTP session keeps the last real address and the
   stream goes on; before, we went silent, which is the likeliest cause of
-  Mike's "resumed and they could not hear me" on Vital). A resume
+  Mike's "resumed and they could not hear me" on a live line). A resume
   answered with anything but sendrecv is offered once more (800 ms), then a
   warning toast names the direction they answered. Every SDP applied is
   logged as `sdp <role>` with offered/concluded — ask for those lines.
@@ -132,7 +132,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - **Timer B stops on the first provisional** (1.4.36, `ClientTransaction`):
   RFC 3261 §17.1.1.2 — Timer B guards only the Calling state. It ran on, so
   every outgoing call that rang > 32 s died with 408 "No response from
-  server"; the callee then answered a torn-down transaction and JetWave
+  server"; the callee then answered a torn-down transaction and the provider
   logged "No ACK timeout" (Mike, 2026-10-23; MicroSIP waited fine). Timer F
   for non-INVITE stays. Ringing is bounded by `RING_TIMEOUT_MS` instead.
 - **Incoming INVITE is registered before its media is bound** (1.4.22):
@@ -430,7 +430,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - Short, user-facing README; engineering detail goes here or in code comments.
 - Wants to *test on a real call* after each change; tell him exactly what to
   try. He tests from a remote-desktop session and on a second laptop.
-- Prefers being told the honest state ("verified on loopback, not on Vital")
+- Prefers being told the honest state ("verified on loopback, not on the live provider")
   over reassurance. Reports bugs with screenshots; give root causes.
 - Likes things automated: releases, updates, CI. Asked for update-download
   buttons inside Settings, popup position reset, pop-out dialogs.
@@ -470,7 +470,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - The two-line sequence Mike hit (hold on line 1, dial on line 2, resume
   line 1) is a loopback test that checks real packet flow after the resume;
   it passes, so any recurrence is PBX behaviour — get the `sdp` log lines.
-- Provider behaviour cannot be simulated; when a fix targets JetWave/Vital,
+- Provider behaviour cannot be simulated; when a fix targets the live providers,
   say so and ask Mike to verify on a real call. The log
   (`Settings → General → Open log folder`, optional SIP trace) is the evidence
   to ask for.
