@@ -160,8 +160,8 @@ class Call extends EventEmitter {
    * to say (sendonly / inactive), never for our offer to pre-empt.
    *
    * It used to offer `recvonly` whenever remoteHold was set. That was a trap:
-   * one odd answer to a resume (a PBX with stale hold state, the PBX's
-   * `c=0.0.0.0`) set remoteHold, every later offer then told the PBX "I will
+   * one odd answer to a resume (a PBX with stale hold state, or a legacy
+   * `c=0.0.0.0` answer) set remoteHold, every later offer then told the PBX "I will
    * not send", the PBX obliged, the other person could no longer hear us, and
    * Hold/Resume could not break out of it. Mike lost a conference to it.
    */

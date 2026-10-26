@@ -1,7 +1,8 @@
 # TwinLine — notes for Claude Code
 
 Dual-line SIP softphone (Electron, plain JavaScript, no framework, no build
-step). Owner: Mike (GitHub `gxmonto`, git author "Mike Borden", mike@sightwatch.com).
+step). Owner: Mike (GitHub `gxmonto`). No customer, site, provider or PBX
+names in this repo: the app targets any SIP service (Mike, 2026-10-26).
 Users are real: two commercial SIP providers' accounts, Windows day to day, Linux
 packages too. Ship carefully; every release reaches installed copies through
 the built-in updater within hours.
@@ -50,16 +51,13 @@ Rules:
   download (`_scheduleAutoRestart`, deferred in 30 s steps while a call is
   up; "Later" = dismiss cancels it, install on quit). The install-on-quit
   path was already silent.
-- **Renumbering to 1.0.0** (Mike, 2026-10-02): 1.4.20 sets
-  `autoUpdater.allowDowngrade = true` and the Linux manual check treats any
-  *different* version as the target. Sequence: (1) 1.4.20 published and on
-  every machine → (2) `gh release edit vX --prerelease` for every release
-  ≤ 1.4.19 (done right after 1.4.20 published; 1.4.20 stays "Latest") →
-  (3) `npm run release -- 1.0.0` (no v1.0.0 tag exists; releases start at
-  v1.0.4) → (4) mark 1.4.20 pre-release. A copy still on ≤ 1.4.19 when 1.0.0
-  becomes "Latest" logs "downgrade is disallowed" and must be reinstalled by
-  hand — so step 3 waits for Mike's confirmation. After 1.0.0 the counting
-  continues 1.0.1, 1.0.2…; `gh release list` shows the whole history.
+- **Next release is 1.5.0** (Mike, 2026-10-26; replaces the 1.0.0
+  renumbering plan of 2026-10-02): `npm run release -- 1.5.0`, and once it is
+  published and "Latest", delete every older release and its tag
+  (`gh release delete v1.4.37 -y --cleanup-tag`, and so on for all of
+  1.0.4–1.4.37; they are all pre-releases already). Installed copies only read
+  the "Latest" release, so nothing breaks for them. `allowDowngrade = true`
+  (since 1.4.20) stays. After 1.5.0 the counting continues 1.5.1, 1.5.2…
 - Versioning (Mike's rule, 2026-09-23): the third number for everything —
   fixes, small features, visual tweaks — and the second number only for a big
   change. Versions are three numbers (semver, the updater orders them); the
@@ -150,7 +148,7 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   address unless `natRewriteContact` is false. A user's router (SIP ALG)
   passed the first REGISTER (private Via) and dropped every request after
   the public address went into Via — green, then "request timed out" for
-  ever, outgoing INVITEs unanswered; RustDesk could not reach that PC
+  ever, outgoing INVITEs unanswered; remote desktop could not reach that PC
   either. `_onRegisterFailure` appends a SIP-ALG hint when a timeout follows
   a success on the same transport. Advice order: TCP transport → turn off
   "Advertise public address" → disable SIP ALG on the router.
@@ -446,9 +444,9 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   (`Start-Process "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"`, ~20 s).
 - `gh` is installed per-user at `%LOCALAPPDATA%\Programs\gh\bin` (on the user
   PATH; Bash sessions need `export PATH="$PATH:$LOCALAPPDATA/Programs/gh/bin"`),
-  authenticated as `gxmonto` (a second `mikebord` account is also logged in).
-  Windows Credential Manager started handing git a `mikebord` token
-  (2026-10-23: push → 403 "Permission denied to mikebord"; the release script
+  authenticated as `gxmonto` (a second account is also logged in).
+  Windows Credential Manager started handing git that other account's token
+  (2026-10-23: push → 403 "Permission denied"; the release script
   had already committed and tagged). This repo's `.git/config` therefore sets
   `credential.helper = !gh auth git-credential`. If a release push fails,
   `git push origin main && git push origin v<x.y.z>` by hand finishes it.

@@ -141,7 +141,7 @@ The blockers named in the first report are cleared. **Windows is clear to launch
 
 **Still open by choice.** Code signing (M2) and unencrypted RTP (L5) are the two things a user-facing security statement should keep mentioning. Both are documented; M2 now has checksums as a partial measure. Dependency currency (L4) is operational and needs an owner.
 
-**How this was verified.** Findings were re-checked by reading the current source at commit `359fee0`, running `npm test` (130 pass) and `npm audit` (0 vulnerabilities) on this Windows host. Packaging behaviour on Linux (the AppImage build and the deb/rpm desktop-entry schema change) and behaviour on a real the provider or the PBX call were not re-exercised here; the commit reports the smoke test passing on the packaged build, and CI builds both platforms. Confirm the Linux packaging job is green on the new toolchain before publishing the Linux artefacts.
+**How this was verified.** Findings were re-checked by reading the current source at commit `359fee0`, running `npm test` (130 pass) and `npm audit` (0 vulnerabilities) on this Windows host. Packaging behaviour on Linux (the AppImage build and the deb/rpm desktop-entry schema change) and behaviour on a real provider call were not re-exercised here; the commit reports the smoke test passing on the packaged build, and CI builds both platforms. Confirm the Linux packaging job is green on the new toolchain before publishing the Linux artefacts.
 
 ---
 

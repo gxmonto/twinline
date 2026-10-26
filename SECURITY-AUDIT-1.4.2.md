@@ -38,7 +38,7 @@ For the **Linux** packages, resolve H1 before publishing the AppImage, and treat
 
 ## Scope and method
 
-The review covered the entire application source under `src/`, the build and release configuration (`package.json`, the GitHub Actions workflows, `tools/`), and the dependency tree. Work was done by static reading of the code, running the existing automated tests, and running `npm audit` against both the production and full dependency trees. Published advisories for the flagged packages were consulted directly. No live SIP provider (the provider or the PBX) was contacted; findings that depend on provider behaviour are marked as needing confirmation on a real call.
+The review covered the entire application source under `src/`, the build and release configuration (`package.json`, the GitHub Actions workflows, `tools/`), and the dependency tree. Work was done by static reading of the code, running the existing automated tests, and running `npm audit` against both the production and full dependency trees. Published advisories for the flagged packages were consulted directly. No live SIP provider was contacted; findings that depend on provider behaviour are marked as needing confirmation on a real call.
 
 ### Attack surface considered
 
@@ -184,4 +184,4 @@ Severity reflects impact on the application as shipped to a real user, not raw C
 
 ---
 
-*This review is a point-in-time reading of build 1.4.2. It does not replace testing against the live the provider and the PBX services, which behave in ways that cannot be reproduced offline; the network-facing conclusions were reached from the code and the loopback tests and should be confirmed on a real call. No exploit code was produced or run in the course of this review.*
+*This review is a point-in-time reading of build 1.4.2. It does not replace testing against live SIP services, which behave in ways that cannot be reproduced offline; the network-facing conclusions were reached from the code and the loopback tests and should be confirmed on a real call. No exploit code was produced or run in the course of this review.*

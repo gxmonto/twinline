@@ -240,7 +240,7 @@ test('a resume answered with c=0.0.0.0 keeps our audio going to the last address
   await outgoing.hold();
   await waitFor(() => inbound.remoteHold === true, { label: 'peer notices the hold' });
 
-  // A the PBX-style PBX: its answer to the resume still carries the old-style
+  // A legacy-hold PBX: its answer to the resume still carries the old-style
   // hold address, once.
   const realBuild = inbound._buildSdp.bind(inbound);
   let legacy = 0;
@@ -688,7 +688,7 @@ test('c=0.0.0.0 from the peer is treated as hold, never as a destination', async
   const errors = [];
   inbound.rtp.on('error', (err) => errors.push(err));
 
-  // Old-style hold, as the PBX/Asterisk-class PBXs still send it.
+  // Old-style hold, as Asterisk-class PBXs still send it.
   const legacyHold = [
     'v=0', 'o=- 1 2 IN IP4 0.0.0.0', 's=-', 'c=IN IP4 0.0.0.0', 't=0 0',
     'm=audio 27780 RTP/AVP 0 101', 'a=rtpmap:0 PCMU/8000',

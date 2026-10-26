@@ -108,7 +108,7 @@
 
 ## 1.4.13 — 2026-09-28
 
-- Hold and resume: if the PBX answers a resume with the old-style "no address" hold (the PBX does this), TwinLine now keeps sending your audio to where it was going, instead of going silent — the likely reason the other person could not hear you after a resume. The resume is also offered a second time and a warning appears if the PBX keeps refusing it.
+- Hold and resume: if the PBX answers a resume with the old-style "no address" hold (some PBXs do this), TwinLine now keeps sending your audio to where it was going, instead of going silent — the likely reason the other person could not hear you after a resume. The resume is also offered a second time and a warning appears if the PBX keeps refusing it.
 
 ## 1.4.12 — 2026-09-28
 
