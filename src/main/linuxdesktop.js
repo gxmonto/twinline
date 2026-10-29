@@ -84,4 +84,4 @@ function cleanStaleAppImageEntries(home, { exists = fs.existsSync } = {}) {
   return result;
 }
 
-module.exports = { cleanStaleAppImageEntries, execTarget, PACKAGE_DESKTOP_ID };
+module.exports = { cleanStaleAppImageEntries, execTarget };

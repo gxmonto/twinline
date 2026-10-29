@@ -15,16 +15,12 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "test": "node --test",
-    "dist": "electron-builder",
     "dist:win": "electron-builder --win",
     "dist:win:noedit": "electron-builder --win -c.win.signAndEditExecutable=false",
     "dist:linux": "electron-builder --linux",
     "dist:linux:docker": "bash tools/build-linux.sh",
-    "pack": "electron-builder --dir",
     "smoke": "electron . --smoke",
     "icon": "node tools/make-icon.js",
-    "release:win": "electron-builder --win --publish always",
-    "release:linux": "electron-builder --linux --publish always",
     "release": "node tools/release.js"
   },
   "devDependencies": {

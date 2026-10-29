@@ -4,3 +4,10 @@ dist/
 .DS_Store
 Thumbs.db
 *.pdf
+# Never commit secrets: API keys, tokens, certificates, local env files.
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12

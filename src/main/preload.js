@@ -45,10 +45,8 @@ contextBridge.exposeInMainWorld('twinline', {
     /** Redirect a ringing incoming call elsewhere without answering (302). */
     deflect: (callId, target) => call('call:deflect', { callId, target }),
     hangup: (callId) => call('call:hangup', { callId }),
-    hangupAll: () => call('call:hangupAll'),
     hold: (callId) => call('call:hold', { callId }),
     unhold: (callId) => call('call:unhold', { callId }),
-    setActive: (callId) => call('call:setActive', { callId }),
     dtmf: (callId, digit) => call('call:dtmf', { callId, digit }),
     transferBlind: (callId, target) => call('call:transferBlind', { callId, target }),
     transferAttended: (callId, otherCallId) => call('call:transferAttended', { callId, otherCallId }),
@@ -59,7 +57,6 @@ contextBridge.exposeInMainWorld('twinline', {
     add: (callId) => call('conf:add', { callId }),
     holdParty: (callId) => call('conf:holdParty', { callId }),
     resumeParty: (callId) => call('conf:resumeParty', { callId }),
-    remove: (callId) => call('conf:remove', { callId }),
     hangupParty: (callId) => call('conf:hangupParty', { callId }),
     split: (keepActiveId) => call('conf:split', { keepActiveId }),
     end: () => call('conf:end'),
@@ -129,8 +126,6 @@ contextBridge.exposeInMainWorld('twinline', {
 
   audio: {
     mute: (muted) => call('audio:mute', { muted }),
-    speakerGain: (gain) => call('audio:speakerGain', { gain }),
-    micGain: (gain) => call('audio:micGain', { gain }),
     /** Send one 20 ms frame of microphone PCM to the SIP stack. */
     sendMicFrame: (int16) => ipcRenderer.send('audio:mic', int16.buffer),
   },

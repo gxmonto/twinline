@@ -30,7 +30,7 @@ function waitFor(predicate, { timeout = 5000, label = 'condition' } = {}) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const { setTimeout: sleep } = require('timers/promises');
 
 function accountConfig(id, localPort, peerPort, overrides = {}) {
   return {

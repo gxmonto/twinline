@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 /**
  * A SIP dialog plus its media: one call leg.
  *
@@ -15,7 +16,7 @@ const { EventEmitter } = require('events');
 const P = require('./parser');
 const SDP = require('./sdp');
 const { newBranch, buildAck } = require('./transaction');
-const { CODECS, preferenceList } = require('../rtp/codecs');
+const { CODECS, preferenceList, offerCodecs } = require('../rtp/codecs');
 
 const TELEPHONE_EVENT_PT = 101;
 /** Longest a call may ring, either way, before we end it ourselves (3 min). */
@@ -177,7 +178,7 @@ class Call extends EventEmitter {
   _buildSdp(direction = this._localDirection()) {
     const codecList = this.negotiated
       ? [{ pt: this.negotiated.pt, name: this.negotiated.codec.name, rate: this.negotiated.codec.rate, channels: 1 }]
-      : preferenceList(this.ua.config.codecs).map((c) => ({ pt: c.staticPt, name: c.name, rate: c.rate, channels: 1 }));
+      : offerCodecs(this.ua.config.codecs);
 
     return SDP.build({
       address: this.ua.mediaAdvertisedAddress,
@@ -886,7 +887,7 @@ class Call extends EventEmitter {
     // has drifted usually settles on the second offer — then say so plainly.
     if (this.state === 'connected' && !this.localHold && this.remoteDirection !== 'sendrecv') {
       this.ua.log.warn('resume was not answered with sendrecv; offering again', { call: this.id.slice(0, 8), answered: this.remoteDirection });
-      await new Promise((r) => setTimeout(r, 800));
+      await sleep(800);
       if (this.state === 'connected' && !this.localHold) await this._reinvite();
       if (this.state === 'connected' && !this.localHold && this.remoteDirection !== 'sendrecv') {
         this.emit('warning', `${this.remoteNumber || 'The other party'} answered the resume with "${this.remoteDirection}" — their side still treats the call as on hold. Try Hold and Resume again.`);
@@ -1059,4 +1060,4 @@ class Call extends EventEmitter {
   }
 }
 
-module.exports = { Call, newTag, newCallId, TELEPHONE_EVENT_PT };
+module.exports = { Call, newCallId };

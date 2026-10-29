@@ -203,4 +203,4 @@ class DigestStore {
   }
 }
 
-module.exports = { createCredential, selectChallenge, DigestStore, hash };
+module.exports = { createCredential, DigestStore, hash };

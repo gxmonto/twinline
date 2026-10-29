@@ -12,8 +12,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
-const http = require('http');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const { EventEmitter } = require('events');
 const log = require('../log').child('models');
 const { followRedirect } = require('../urlpolicy');
@@ -240,64 +240,46 @@ function verifyFile(dest, entry, digest) {
 }
 
 /** Stream a URL to disk via a .part file, following redirects. Resolves with the SHA-256. */
-function downloadFile(url, dest, signal, onProgress, redirects = 6) {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) { reject(abortError()); return; }
-    const mod = url.startsWith('http:') ? http : https;
-    const req = mod.get(url, { headers: { 'user-agent': 'TwinLine' } }, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
-        res.resume();
-        // Hugging Face and GitHub redirect to their CDNs; follow, but never
-        // onto plain http — the hash check would still catch a swapped file,
-        // yet a download channel should not silently drop to cleartext.
-        let next;
-        try { next = followRedirect(url, res.headers.location); } catch (err) { reject(err); return; }
-        resolve(downloadFile(next, dest, signal, onProgress, redirects - 1));
-        return;
-      }
-      if (res.statusCode !== 200) { res.resume(); reject(new Error(`HTTP ${res.statusCode} downloading ${path.basename(dest)}`)); return; }
+async function downloadFile(url, dest, signal, onProgress, redirects = 6) {
+  if (signal.aborted) throw abortError();
+  const res = await fetch(url, { redirect: 'manual', signal, headers: { 'user-agent': 'TwinLine' } });
+  const location = res.headers.get('location');
+  if ([301, 302, 303, 307, 308].includes(res.status) && location && redirects > 0) {
+    await res.body?.cancel();
+    // Hugging Face and GitHub redirect to their CDNs; follow, but never
+    // onto plain http — the hash check would still catch a swapped file,
+    // yet a download channel should not silently drop to cleartext.
+    return downloadFile(followRedirect(url, location), dest, signal, onProgress, redirects - 1);
+  }
+  if (res.status !== 200) throw new Error(`HTTP ${res.status} downloading ${path.basename(dest)}`);
 
-      const total = parseInt(res.headers['content-length'] || '0', 10);
-      const part = `${dest}.part`;
-      const out = fs.createWriteStream(part);
-      const hash = require('crypto').createHash('sha256');
-      let received = 0;
-      let lastReport = 0;
-
-      const onAbort = () => { req.destroy(abortError()); };
-      signal.addEventListener('abort', onAbort, { once: true });
-
-      res.on('data', (chunk) => {
+  const total = Number(res.headers.get('content-length')) || 0;
+  const part = `${dest}.part`;
+  const hash = require('crypto').createHash('sha256');
+  let received = 0;
+  let lastReport = 0;
+  try {
+    // ponytail: no idle timeout; a stalled download waits for Cancel.
+    await pipeline(Readable.fromWeb(res.body), async function* (chunks) {
+      for await (const chunk of chunks) {
         received += chunk.length;
         hash.update(chunk);
         const now = Date.now();
         if (now - lastReport > 250) { lastReport = now; onProgress(received, total); }
-      });
-      res.pipe(out);
-      out.on('finish', () => {
-        signal.removeEventListener('abort', onAbort);
-        if (total && received !== total) {
-          fs.rmSync(part, { force: true });
-          reject(new Error(`incomplete download of ${path.basename(dest)} (${received}/${total} bytes)`));
-          return;
-        }
-        fs.renameSync(part, dest);
-        onProgress(received, total || received);
-        resolve(hash.digest('hex'));
-      });
-      const fail = (err) => {
-        signal.removeEventListener('abort', onAbort);
-        out.destroy();
-        fs.rmSync(part, { force: true });
-        reject(err);
-      };
-      res.on('error', fail);
-      out.on('error', fail);
-      req.on('error', fail);
-    });
-    req.on('error', (err) => reject(err));
-    req.setTimeout(60000, () => req.destroy(new Error('download timed out')));
-  });
+        yield chunk;
+      }
+    }, fs.createWriteStream(part), { signal });
+  } catch (err) {
+    fs.rmSync(part, { force: true });
+    throw err.name === 'AbortError' ? abortError() : err;
+  }
+  if (total && received !== total) {
+    fs.rmSync(part, { force: true });
+    throw new Error(`incomplete download of ${path.basename(dest)} (${received}/${total} bytes)`);
+  }
+  fs.renameSync(part, dest);
+  onProgress(received, total || received);
+  return hash.digest('hex');
 }
 
 function abortError() {
@@ -306,4 +288,4 @@ function abortError() {
   return err;
 }
 
-module.exports = { ModelStore, CATALOG, VAD, SPEAKER, verifyFile, downloadFile };
+module.exports = { ModelStore, CATALOG, VAD, verifyFile, downloadFile };

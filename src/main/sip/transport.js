@@ -260,13 +260,4 @@ function createTransport(kind, options) {
   }
 }
 
-module.exports = {
-  UdpTransport,
-  StreamTransport,
-  createTransport,
-  resolveTarget,
-  localAddressFor,
-  firstNonLoopback,
-  takeMessage,
-  DEFAULT_PORTS,
-};
+module.exports = { createTransport, resolveTarget, localAddressFor, DEFAULT_PORTS };

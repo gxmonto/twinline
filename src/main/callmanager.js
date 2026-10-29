@@ -590,16 +590,6 @@ class CallManager extends EventEmitter {
     return { muted: this.muted };
   }
 
-  setSpeakerGain(gain) {
-    this.audio.setSpeakerGain(gain);
-    return { ok: true };
-  }
-
-  setMicGain(gain) {
-    this.audio.setMicGain(gain);
-    return { ok: true };
-  }
-
   async transferBlind(callId, target) {
     await this.call(callId).transferBlind(target);
     return { ok: true };

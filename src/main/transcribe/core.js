@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 /**
  * The recognition pipeline, independent of Electron so it can run inside a
  * utility process (worker.js) or from the command line (tools/transcribe-file.js).
@@ -260,7 +261,7 @@ class Transcriber {
 
   /** Wait until every queued segment has been decoded. */
   async idle() {
-    while (this.decoding || this.queue.length) await new Promise((r) => setTimeout(r, 25));
+    while (this.decoding || this.queue.length) await sleep(25);
   }
 
   close() {
@@ -268,4 +269,4 @@ class Transcriber {
   }
 }
 
-module.exports = { Transcriber, Upsampler2x, TARGET_RATE, VAD_WINDOW, HALLUCINATIONS };
+module.exports = { Transcriber, Upsampler2x, VAD_WINDOW };

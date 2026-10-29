@@ -415,10 +415,8 @@ class TransactionLayer extends EventEmitter {
 module.exports = {
   TransactionLayer,
   ClientTransaction,
-  ServerTransaction,
   newBranch,
   transactionId,
   buildAck,
-  topVia,
-  T1, T2, T4,
+  T1,
 };

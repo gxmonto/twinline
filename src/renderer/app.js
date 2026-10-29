@@ -918,7 +918,7 @@ function renderSettingsGeneral() {
 }
 
 async function saveSettings() {
-  const next = JSON.parse(JSON.stringify(settings));
+  const next = structuredClone(settings);
 
   next.accounts.forEach((account, index) => {
     const p = `a${index}`;

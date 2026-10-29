@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -46,7 +47,7 @@ function fakeSherpa({ silenceWindows = 3, text = (samples) => `heard ${samples.l
     createStream() { return { accept: null, acceptWaveform(o) { this.accept = o; } }; }
     async decodeAsync(stream) {
       concurrent++; maxConcurrent = Math.max(maxConcurrent, concurrent);
-      await new Promise((r) => setTimeout(r, 5));
+      await sleep(5);
       concurrent--;
       return { text: text(stream.accept.samples), lang: '<|en|>' };
     }
@@ -180,6 +181,29 @@ test('model store knows what is installed and where', () => {
   assert.strictEqual(status.models[0].type, 'nemo_transducer');
   assert.ok(store.dirFor('parakeet').endsWith('parakeet-tdt-0.6b-v3'));
   assert.throws(() => ModelStore.entry('gigantic'));
+});
+
+test('downloadFile streams to disk, follows a same-scheme redirect and reports progress', async () => {
+  const { downloadFile } = require('../src/main/transcribe/models');
+  const http = require('http');
+  const body = Buffer.alloc(100000, 7);
+  const server = http.createServer((req, res) => {
+    if (req.url === '/hop') { res.writeHead(302, { location: '/file' }); res.end(); return; }
+    res.writeHead(200, { 'content-length': body.length }); res.end(body);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twinline-dl-'));
+  const dest = path.join(dir, 'model.bin');
+  const progress = [];
+  try {
+    const digest = await downloadFile(`http://127.0.0.1:${server.address().port}/hop`, dest, new AbortController().signal, (r, t) => progress.push([r, t]));
+    assert.strictEqual(digest, require('crypto').createHash('sha256').update(body).digest('hex'));
+    assert.strictEqual(fs.statSync(dest).size, body.length);
+    assert.deepStrictEqual(progress.at(-1), [body.length, body.length]);
+    assert.strictEqual(fs.existsSync(`${dest}.part`), false, 'the .part file is renamed away');
+    const aborted = new AbortController(); aborted.abort();
+    await assert.rejects(downloadFile(`http://127.0.0.1:${server.address().port}/file`, dest, aborted.signal, () => {}), { name: 'AbortError' });
+  } finally { server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('mixer exposes per-party audio for taps and plays a queued tone to both sides', () => {

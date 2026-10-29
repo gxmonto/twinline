@@ -478,23 +478,6 @@ function getHeaders(msg, name) {
   return msg.headers[normalizeName(name)] || [];
 }
 
-function setHeader(msg, name, value) {
-  msg.headers[normalizeName(name)] = Array.isArray(value) ? value.slice() : [String(value)];
-  return msg;
-}
-
-function addHeader(msg, name, value) {
-  const key = normalizeName(name);
-  if (!msg.headers[key]) msg.headers[key] = [];
-  msg.headers[key].push(String(value));
-  return msg;
-}
-
-function removeHeader(msg, name) {
-  delete msg.headers[normalizeName(name)];
-  return msg;
-}
-
 module.exports = {
   parse,
   stringify,
@@ -505,16 +488,10 @@ module.exports = {
   parseVia,
   stringifyVia,
   parseCSeq,
-  parseParams,
-  stringifyParams,
   parseAuthHeader,
   stringifyAuthHeader,
   reasonPhrase,
-  safeSplit,
   normalizeName,
   getHeader,
   getHeaders,
-  setHeader,
-  addHeader,
-  removeHeader,
 };

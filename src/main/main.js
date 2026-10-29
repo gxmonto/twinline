@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 /**
  * Electron main process: window, tray, settings, and the bridge between the
  * renderer (UI + audio devices) and the SIP/RTP stack.
@@ -160,7 +161,7 @@ async function runSmokeTest() {
       setTimeout(() => reject(new Error('page load timed out')), 20000);
     });
     // Give the module script and its first IPC round-trip time to settle.
-    await new Promise((r) => setTimeout(r, 1500));
+    await sleep(1500);
 
     const report = await mainWindow.webContents.executeJavaScript(`(async () => ({
       bridge: typeof window.twinline === 'object',
@@ -232,7 +233,7 @@ async function runSmokeTest() {
     }))()`);
     const panelDeadline = Date.now() + 15000;
     do {
-      await new Promise((r) => setTimeout(r, 250));
+      await sleep(250);
       report.panel = await probePanel();
     } while (!report.panel.settingsShown && Date.now() < panelDeadline);
     // Nothing may sit on top of the dialog's close button or the dialler.
@@ -251,7 +252,7 @@ async function runSmokeTest() {
       for (const id of ['btnSettings', 'btnHistory', 'btnContacts']) { document.getElementById(id).click(); await wait(300); }
       return { visible: ['settingsOverlay', 'historyOverlay', 'contactsOverlay'].filter((id) => !document.getElementById(id).classList.contains('hidden')) };
     })()`);
-    await new Promise((r) => setTimeout(r, 300));
+    await sleep(300);
     report.dialogs.windows = [...panels.keys()].sort();
     // Close only what this check opened; the settings panel is probed further down.
     if (process.env.TWINLINE_SMOKE_SHOTS) {
@@ -262,7 +263,7 @@ async function runSmokeTest() {
       for (const [key, w] of [['main', mainWindow], ...panels.entries()]) {
         if (w.isDestroyed()) continue;
         if (w !== mainWindow) w.showInactive();
-        await new Promise((r) => setTimeout(r, 400));
+        await sleep(400);
         const img = await w.capturePage();
         fs.writeFileSync(path.join(dir, `${key.replace(/[^a-z]/gi, '') || 'main'}.png`), img.toPNG());
       }
@@ -279,7 +280,7 @@ async function runSmokeTest() {
     // caption buttons on Windows and cannot be clicked (Mike's report).
     const [w0, h0] = mainWindow.getSize();
     mainWindow.setSize(380, 560, false);
-    await new Promise((r) => setTimeout(r, 400));
+    await sleep(400);
     report.narrow = await mainWindow.webContents.executeJavaScript(`(() => {
       const bar = document.querySelector('.titlebar').getBoundingClientRect();
       const btn = document.getElementById('btnSettings').getBoundingClientRect();
@@ -293,11 +294,11 @@ async function runSmokeTest() {
     // The incoming-call popup must open over the phone window — even when the
     // phone is docked at a screen edge and a far-away position is remembered.
     mainWindow.showInactive();
-    await new Promise((r) => setTimeout(r, 300));
+    await sleep(300);
     const { workArea } = screen.getDisplayMatching(mainWindow.getBounds());
     mainWindow.setPosition(workArea.x + workArea.width - w0, workArea.y + 40, false);
     createPopup(44 + POPUP_CALL_HEIGHT);
-    await new Promise((r) => setTimeout(r, 400));
+    await sleep(400);
     const [px, py] = popupWindow.getPosition();
     const [pw, ph] = popupWindow.getSize();
     const mb = mainWindow.getBounds();
@@ -314,7 +315,7 @@ async function runSmokeTest() {
     // …and with the phone hidden (tray) it sits in the middle of the screen.
     mainWindow.hide();
     createPopup(44 + POPUP_CALL_HEIGHT);
-    await new Promise((r) => setTimeout(r, 400));
+    await sleep(400);
     const [hx, hy] = popupWindow.getPosition();
     const [hw, hh] = popupWindow.getSize();
     const want = { x: Math.round(workArea.x + (workArea.width - hw) / 2), y: Math.round(workArea.y + (workArea.height - hh) / 2) };
@@ -533,7 +534,7 @@ async function runUpdateCheck(url) {
       status = await updater.download();
       // download() resolves when electron-updater finishes; give the final
       // 'update-downloaded' event a moment to land.
-      await new Promise((r) => setTimeout(r, 500));
+      await sleep(500);
       status = updater.status;
       report.steps.push({ download: status.state, version: status.version, progress: status.progress, error: status.error });
     }
@@ -1010,10 +1011,8 @@ function registerIpc() {
   handle('call:reject', ({ callId, status }) => manager.reject(callId, status));
   handle('call:deflect', ({ callId, target }) => manager.deflect(callId, target));
   handle('call:hangup', ({ callId }) => manager.hangup(callId));
-  handle('call:hangupAll', () => manager.hangupAll());
   handle('call:hold', ({ callId }) => manager.hold(callId));
   handle('call:unhold', ({ callId }) => manager.unhold(callId));
-  handle('call:setActive', ({ callId }) => manager.setActive(callId));
   handle('call:dtmf', ({ callId, digit }) => manager.dtmf(callId, digit));
   handle('call:transferBlind', ({ callId, target }) => manager.transferBlind(callId, target));
   handle('call:transferAttended', ({ callId, otherCallId }) => manager.transferAttended(callId, otherCallId));
@@ -1022,7 +1021,6 @@ function registerIpc() {
   handle('conf:add', ({ callId }) => manager.addToConference(callId));
   handle('conf:holdParty', ({ callId }) => manager.holdConferenceParty(callId));
   handle('conf:resumeParty', ({ callId }) => manager.resumeConferenceParty(callId));
-  handle('conf:remove', ({ callId }) => manager.removeFromConference(callId));
   handle('conf:hangupParty', ({ callId }) => manager.hangupConferenceParty(callId));
   handle('conf:split', ({ keepActiveId }) => manager.splitConference(keepActiveId));
   handle('conf:end', () => manager.endConference());
@@ -1035,8 +1033,6 @@ function registerIpc() {
     settings.save();
     return { ok: true };
   });
-  handle('audio:speakerGain', ({ gain }) => manager.setSpeakerGain(gain));
-  handle('audio:micGain', ({ gain }) => manager.setMicGain(gain));
 
   // High-rate path: one 20 ms microphone frame, as Int16 PCM.
   on('audio:mic', (_event, buffer) => {
@@ -1122,7 +1118,7 @@ app.on('before-quit', async (event) => {
     event.preventDefault();
     const done = manager.shutdown().catch(() => {});
     manager = null;
-    await Promise.race([done, new Promise((r) => setTimeout(r, 1500))]);
+    await Promise.race([done, sleep(1500)]);
     app.exit(0);
   }
   quitting = true;

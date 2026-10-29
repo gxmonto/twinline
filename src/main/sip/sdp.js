@@ -125,26 +125,6 @@ function mediaAddress(sdp, media) {
   return c ? c.address : null;
 }
 
-/**
- * The effective direction of the remote's stream from our point of view.
- * Returns { remoteSends, remoteReceives }.
- */
-function directionFlags(direction) {
-  switch (direction) {
-    case 'sendonly': return { remoteSends: true, remoteReceives: false };
-    case 'recvonly': return { remoteSends: false, remoteReceives: true };
-    case 'inactive': return { remoteSends: false, remoteReceives: false };
-    default: return { remoteSends: true, remoteReceives: true };
-  }
-}
-
-/** The direction we must signal so the peer sees `direction`. */
-function reverseDirection(direction) {
-  if (direction === 'sendonly') return 'recvonly';
-  if (direction === 'recvonly') return 'sendonly';
-  return direction;
-}
-
 let sessionCounter = Math.floor(Date.now() / 1000);
 
 /**
@@ -258,9 +238,6 @@ module.exports = {
   answerDirection,
   audioMedia,
   mediaAddress,
-  directionFlags,
-  reverseDirection,
   negotiate,
   findTelephoneEvent,
-  DIRECTIONS,
 };

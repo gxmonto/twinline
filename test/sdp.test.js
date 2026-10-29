@@ -84,17 +84,6 @@ test('finds the telephone-event payload type', () => {
   assert.deepStrictEqual(SDP.findTelephoneEvent(media), { pt: 101, rate: 8000 });
 });
 
-test('hold directions are read correctly', () => {
-  for (const [direction, expected] of [
-    ['sendonly', { remoteSends: true, remoteReceives: false }],
-    ['recvonly', { remoteSends: false, remoteReceives: true }],
-    ['inactive', { remoteSends: false, remoteReceives: false }],
-    ['sendrecv', { remoteSends: true, remoteReceives: true }],
-  ]) {
-    assert.deepStrictEqual(SDP.directionFlags(direction), expected, direction);
-  }
-});
-
 test('builds an offer that parses back to the same thing', () => {
   const body = SDP.build({
     address: '192.0.2.10',

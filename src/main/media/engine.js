@@ -176,4 +176,4 @@ class AudioEngine extends EventEmitter {
   }
 }
 
-module.exports = { AudioEngine, FRAME_MS, FRAME_SAMPLES };
+module.exports = { AudioEngine, FRAME_SAMPLES };

@@ -340,4 +340,4 @@ function parseVCard(text) {
   return out;
 }
 
-module.exports = { ContactStore, normalizeNumber, numbersMatch, parseCSV, parseVCard, parseJSON, CSV_COLUMNS };
+module.exports = { ContactStore, normalizeNumber, numbersMatch, parseCSV, parseVCard };

@@ -603,4 +603,4 @@ function formatTranscript(record) {
   return head.concat(body).join('\n') + '\n';
 }
 
-module.exports = { TranscriptionService, formatTranscript, speakerLabel, hasMultipleParties, FRAME_SAMPLES };
+module.exports = { TranscriptionService, formatTranscript, speakerLabel, FRAME_SAMPLES };

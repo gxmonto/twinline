@@ -54,4 +54,4 @@ function writeFileAtomic(file, data, { mode = 0o600, retries = 6, delayMs = 50, 
   }
 }
 
-module.exports = { writeFileAtomic, RETRY_CODES };
+module.exports = { writeFileAtomic };

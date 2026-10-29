@@ -20,8 +20,6 @@
  */
 
 const { EventEmitter } = require('events');
-const https = require('https');
-const http = require('http');
 const { app, shell } = require('electron');
 const log = require('./log').child('updater');
 const { isLocalNetwork, followRedirect } = require('./urlpolicy');
@@ -53,27 +51,17 @@ function unquote(s) {
   return (t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")) ? t.slice(1, -1) : t;
 }
 
-function fetchText(url, redirects = 5) {
-  return new Promise((resolve, reject) => {
-    const mod = url.startsWith('http:') ? http : https;
-    const req = mod.get(url, { headers: { 'user-agent': `TwinLine/${app.getVersion()}` } }, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
-        res.resume();
-        // The redirect must not drop the manifest onto plain http (M3).
-        let next;
-        try { next = followRedirect(url, res.headers.location); } catch (err) { reject(err); return; }
-        resolve(fetchText(next, redirects - 1));
-        return;
-      }
-      if (res.statusCode !== 200) { res.resume(); reject(new Error(`HTTP ${res.statusCode} for ${url}`)); return; }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy(new Error('response too large')); });
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.setTimeout(15000, () => req.destroy(new Error('timed out')));
-  });
+async function fetchText(url, redirects = 5) {
+  const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'user-agent': `TwinLine/${app.getVersion()}` } });
+  const location = res.headers.get('location');
+  if ([301, 302, 303, 307, 308].includes(res.status) && location && redirects > 0) {
+    await res.body?.cancel();
+    // The redirect must not drop the manifest onto plain http (M3).
+    return fetchText(followRedirect(url, location), redirects - 1);
+  }
+  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${url}`);
+  if (Number(res.headers.get('content-length')) > 1e6) throw new Error('response too large');
+  return res.text();
 }
 
 /**

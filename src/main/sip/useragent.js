@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 /**
  * One SIP account: transport, registration, and inbound request routing.
  *
@@ -17,28 +18,7 @@ const log = require('../log');
 
 const ALLOWED_METHODS = 'INVITE, ACK, CANCEL, BYE, OPTIONS, INFO, NOTIFY, REFER, UPDATE, PRACK, MESSAGE';
 
-const DEFAULTS = {
-  enabled: true,
-  displayName: '',
-  username: '',
-  authUsername: '',
-  password: '',
-  domain: '',
-  outboundProxy: '',
-  transport: 'UDP',
-  localPort: 0,
-  register: true,
-  registerExpires: 300,
-  keepAliveSeconds: 30,
-  codecs: ['PCMU', 'PCMA'],
-  dtmfMode: 'rfc2833',          // rfc2833 | info
-  holdDirection: 'sendonly',    // sendonly | inactive
-  publicAddress: '',            // manual NAT override
-  mediaPortRange: [16384, 32766],
-  acceptFromServerOnly: true,   // ignore SIP from anywhere but the registrar
-  mediaStrictSource: true,      // ignore RTP from anywhere but the SDP address
-  natRewriteContact: true,      // advertise the learned public address in Contact
-};
+const { ACCOUNT_DEFAULTS: DEFAULTS } = require('../config');
 
 class UserAgent extends EventEmitter {
   /**
@@ -309,7 +289,7 @@ class UserAgent extends EventEmitter {
       // transaction would otherwise wait 32 s, and so would whoever stopped us.
       await Promise.race([
         this._sendRegister(0).catch(() => {}),
-        new Promise((r) => setTimeout(r, 3000)),
+        sleep(3000),
       ]);
     }
     this._setRegistration('unregistered', { reason: 'Stopped' });
@@ -775,4 +755,4 @@ class UserAgent extends EventEmitter {
   }
 }
 
-module.exports = { UserAgent, DEFAULTS, DEFAULT_PORTS };
+module.exports = { UserAgent, DEFAULT_PORTS };

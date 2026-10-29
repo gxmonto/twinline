@@ -386,9 +386,10 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   or the release page when unsure. Keep those names in step with
   electron-builder's artifact names.
 - Updater: a custom feed must be https unless loopback/RFC 1918
-  (`feedFromUrl`); `openExternal` only for http(s). Redirects in `fetchText`
-  and the model downloader go through `urlpolicy.followRedirect`, which
-  refuses https→http (audit M3). Models: size + SHA-256 pinned in `models.js`
+  (`feedFromUrl`); `openExternal` only for http(s). `fetchText` and the
+  model downloader use global `fetch` with `redirect: 'manual'` (Node's
+  undici hands back the 3xx itself) and every hop goes through
+  `urlpolicy.followRedirect`, which refuses https→http (audit M3). Models: size + SHA-256 pinned in `models.js`
   CATALOG and verified on download — refresh the pins if upstream files change
   (`huggingface.co/api/models/<repo>?blobs=true` → `lfs.sha256`).
 - IPC: `handle()`/`on()` in main.js run `trustedSender(event)` — main frame,
@@ -493,5 +494,13 @@ broadcasts to all windows; only the speaker stream goes to the main window.
 - Commit messages end with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`.
 - Settings live in `%APPDATA%\TwinLine` (Linux `~/.config/TwinLine`): settings.json,
   contacts.json, logs/, models/, transcripts/. Nothing user-specific is in the repo.
+- **No secrets in the repo, ever** (Mike, 2026-10-29): API keys, tokens,
+  certificates and `.env` files stay out of git (`.gitignore` lists `.env`,
+  `.env.*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`) and out of the GitHub repo
+  description and release notes. The app needs none today; CI signing
+  secrets live in GitHub Actions secrets only. Tree and history were
+  scanned clean on 2026-10-29.
+- Per-line defaults live once, in `config.js ACCOUNT_DEFAULTS`; the
+  UserAgent spreads the same object. Add a line option there only.
 - The `homepage`/`repository` fields point at github.com/gxmonto/twinline;
   deb/rpm require a homepage.

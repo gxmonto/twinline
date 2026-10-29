@@ -420,4 +420,4 @@ function eventToDigit(event) {
   return EVENT_DIGITS[event] ?? null;
 }
 
-module.exports = { RtpSession, parsePacket, buildPacket, digitToEvent, eventToDigit, isUnspecified };
+module.exports = { RtpSession, parsePacket, buildPacket, isUnspecified };

@@ -1,4 +1,5 @@
 'use strict';
+const { setTimeout: sleep } = require('timers/promises');
 /**
  * TranscriptionService plumbing, with a fake worker in place of the Electron
  * utility process: does microphone audio actually reach the "mic" channel,
@@ -137,7 +138,7 @@ test('two-party transcripts still say "Caller"', () => {
 test('merging a conference keeps the earliest transcript and closes the rest', async () => {
   const { service, worker } = await setup();
   await service.start({ callId: 'callA', remoteNumber: '111', answeredAt: Date.now() });
-  await new Promise((r) => setTimeout(r, 5));
+  await sleep(5);
   await service.start({ callId: 'callB', remoteNumber: '222', answeredAt: Date.now() });
   assert.strictEqual(service.live.size, 2);
 

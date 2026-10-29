@@ -22,32 +22,33 @@ const { writeFileAtomic } = require('./fsutil');
 
 const SECRET_PREFIX = 'enc:v1:';
 
+/** Per-line settings; the UserAgent reads the same object for its defaults. */
+const ACCOUNT_DEFAULTS = {
+  enabled: true,
+  displayName: '',
+  username: '',
+  authUsername: '',
+  password: '',
+  domain: '',
+  outboundProxy: '',
+  transport: 'UDP',
+  localPort: 0,
+  register: true,
+  registerExpires: 300,
+  keepAliveSeconds: 30,
+  codecs: ['PCMU', 'PCMA'],
+  dtmfMode: 'rfc2833',          // rfc2833 | info
+  holdDirection: 'sendonly',    // sendonly | inactive
+  publicAddress: '',            // manual NAT override
+  acceptFromServerOnly: true,   // ignore SIP from anywhere but the registrar
+  mediaStrictSource: true,      // ignore RTP from anywhere but the SDP address
+  // Put the public address the server reports (rport/received) into our
+  // Contact. Off for routers with SIP ALG, which choke on it.
+  natRewriteContact: true,
+};
+
 function defaultAccount(index) {
-  return {
-    id: `line${index}`,
-    label: `Line ${index}`,
-    enabled: index === 1,
-    displayName: '',
-    username: '',
-    authUsername: '',
-    password: '',
-    domain: '',
-    outboundProxy: '',
-    transport: 'UDP',
-    localPort: 0,
-    register: true,
-    registerExpires: 300,
-    keepAliveSeconds: 30,
-    codecs: ['PCMU', 'PCMA'],
-    dtmfMode: 'rfc2833',
-    holdDirection: 'sendonly',
-    publicAddress: '',
-    acceptFromServerOnly: true,
-    mediaStrictSource: true,
-    // Put the public address the server reports (rport/received) into our
-    // Contact. Off for routers with SIP ALG, which choke on it.
-    natRewriteContact: true,
-  };
+  return { id: `line${index}`, label: `Line ${index}`, ...structuredClone(ACCOUNT_DEFAULTS), enabled: index === 1 };
 }
 
 const DEFAULT_SETTINGS = {
@@ -139,7 +140,7 @@ class SettingsStore {
       const parsed = JSON.parse(raw);
       this.data = mergeDefaults(parsed, DEFAULT_SETTINGS);
     } catch {
-      this.data = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      this.data = structuredClone(DEFAULT_SETTINGS);
     }
     for (const account of this.data.accounts) {
       account.password = this._decrypt(account.password);
@@ -149,7 +150,7 @@ class SettingsStore {
 
   save(data) {
     if (data) this.data = mergeDefaults(data, DEFAULT_SETTINGS);
-    const onDisk = JSON.parse(JSON.stringify(this.data));
+    const onDisk = structuredClone(this.data);
     for (const account of onDisk.accounts) {
       account.password = this._encrypt(account.password);
     }
@@ -186,7 +187,7 @@ class SettingsStore {
 
   /** Settings with passwords replaced by a placeholder, for the renderer. */
   redacted() {
-    const copy = JSON.parse(JSON.stringify(this.data));
+    const copy = structuredClone(this.data);
     for (const account of copy.accounts) {
       account.hasPassword = !!account.password;
       account.password = account.password ? '••••••••' : '';
@@ -231,4 +232,4 @@ function mergeDefaults(value, defaults) {
   return value === undefined ? defaults : value;
 }
 
-module.exports = { SettingsStore, DEFAULT_SETTINGS, defaultAccount, mergeDefaults };
+module.exports = { SettingsStore, DEFAULT_SETTINGS, ACCOUNT_DEFAULTS, defaultAccount, mergeDefaults };

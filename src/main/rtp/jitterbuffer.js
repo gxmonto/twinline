@@ -175,4 +175,4 @@ class JitterBuffer {
   }
 }
 
-module.exports = { JitterBuffer, seqDelta };
+module.exports = { JitterBuffer };

@@ -609,7 +609,6 @@ body.wco #btnMinimise, body.wco #btnMaximise, body.wco #btnClose { display: none
 .fatal { padding: 16px; color: var(--red); white-space: pre-wrap; }
 .bar.inline-bar { width: 120px; height: 6px; border-radius: 3px; background: var(--bg-input); overflow: hidden; display: inline-block; vertical-align: middle; }
 .bar.inline-bar span { display: block; height: 100%; background: var(--accent); }
-.transcript-foot-actions { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; }
 
 /* ---- popped-out panels -------------------------------------------------- */
 

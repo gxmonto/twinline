@@ -143,6 +143,6 @@ module.exports = {
   CODECS,
   preferenceList,
   offerCodecs,
-  encodePCMU, decodePCMU, encodePCMA, decodePCMA,
+  encodePCMU, decodePCMU,
   linear2ulaw, ulaw2linear, linear2alaw, alaw2linear,
 };

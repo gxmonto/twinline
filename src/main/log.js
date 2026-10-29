@@ -41,10 +41,6 @@ function init(dir, { maxBytes, keep } = {}) {
   info('log', `--- log opened; pid ${process.pid}, platform ${process.platform} ---`);
 }
 
-function setLevel(level) {
-  state.level = LEVELS[level] ?? LEVELS.info;
-}
-
 /** Turn full SIP message tracing on or off (implies debug level when on). */
 function setTraceSip(enabled) {
   state.traceSip = !!enabled;
@@ -127,7 +123,7 @@ function child(scope) {
 }
 
 module.exports = {
-  init, setLevel, setTraceSip, child, debug, info, warn, error, sip, redactSip,
+  init, setTraceSip, child, debug, info, warn, error, sip, redactSip,
   get dir() { return state.dir; },
   get file() { return state.file; },
   get traceSip() { return state.traceSip; },
