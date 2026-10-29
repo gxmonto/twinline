@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 — 2026-10-29
+
+- Conference: pressing Mute now mutes only your microphone. The other people keep hearing each other; before, it silenced everyone.
+- The optional "muted" voice cue now plays (a recorded voice on your chosen speaker). The old text-to-speech version stayed silent on many PCs.
+
 ## 1.4.37 — 2026-10-23
 
 - Conference: when a held call is brought into a conference it now hears you immediately, even if the provider is slow or fails to confirm the resume. Hold, resume and conference steps are written to the log.

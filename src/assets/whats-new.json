@@ -1,5 +1,5 @@
 {
-  "version": "1.4.37",
-  "date": "2026-10-23",
-  "notes": "- Conference: when a held call is brought into a conference it now hears you immediately, even if the provider is slow or fails to confirm the resume. Hold, resume and conference steps are written to the log."
+  "version": "1.5.0",
+  "date": "2026-10-29",
+  "notes": "- Conference: pressing Mute now mutes only your microphone. The other people keep hearing each other; before, it silenced everyone.\n- The optional \"muted\" voice cue now plays (a recorded voice on your chosen speaker). The old text-to-speech version stayed silent on many PCs."
 }
