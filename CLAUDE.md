@@ -51,13 +51,13 @@ Rules:
   download (`_scheduleAutoRestart`, deferred in 30 s steps while a call is
   up; "Later" = dismiss cancels it, install on quit). The install-on-quit
   path was already silent.
-- **Next release is 1.5.0** (Mike, 2026-10-26; replaces the 1.0.0
-  renumbering plan of 2026-10-02): `npm run release -- 1.5.0`, and once it is
-  published and "Latest", delete every older release and its tag
-  (`gh release delete v1.4.37 -y --cleanup-tag`, and so on for all of
-  1.0.4–1.4.37; they are all pre-releases already). Installed copies only read
-  the "Latest" release, so nothing breaks for them. `allowDowngrade = true`
-  (since 1.4.20) stays. After 1.5.0 the counting continues 1.5.1, 1.5.2…
+- **1.5.0 is the only release** (2026-10-28, Mike's call; it replaced the
+  1.0.0 renumbering plan): every release and tag from v1.0.4 to v1.4.37 was
+  deleted with `gh release delete vX -y --cleanup-tag` once v1.5.0 was
+  "Latest" (two deletes failed transiently and went through on retry).
+  Installed copies only read "Latest", so nothing broke. `gh release list`
+  no longer shows history; CHANGELOG.md does. `allowDowngrade = true` (since
+  1.4.20) stays. Counting continues 1.5.1, 1.5.2…
 - Versioning (Mike's rule, 2026-09-23): the third number for everything —
   fixes, small features, visual tweaks — and the second number only for a big
   change. Versions are three numbers (semver, the updater orders them); the
@@ -69,7 +69,8 @@ Rules:
   tone, transcript auto-close → 1.4.1 native caption buttons, popup manual drag →
   1.4.2 hosted-conference detection, voice separation, 302 redirect → 1.4.3
   security-audit fixes (electron-builder 26, keyring honesty, redirect rule,
-  IPC sender check, trace masking, SHA256SUMS).
+  IPC sender check, trace masking, SHA256SUMS) → 1.4.4–1.4.37 (see CHANGELOG.md)
+  → 1.5.0 mute fix + recorded cue; older releases deleted.
 
 ## Architecture in one breath
 
