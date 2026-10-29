@@ -162,8 +162,9 @@ async function runSmokeTest() {
     // Give the module script and its first IPC round-trip time to settle.
     await new Promise((r) => setTimeout(r, 1500));
 
-    const report = await mainWindow.webContents.executeJavaScript(`(() => ({
+    const report = await mainWindow.webContents.executeJavaScript(`(async () => ({
       bridge: typeof window.twinline === 'object',
+      mutedClip: await new Promise((r) => { const a = new Audio('../assets/muted.wav'); a.onloadedmetadata = () => r(a.duration > 0.2); a.onerror = () => r(false); setTimeout(() => r(false), 5000); }),
       dialer: !!document.getElementById('dialInput'),
       keypadKeys: document.querySelectorAll('#keypad button').length,
       lineChips: document.querySelectorAll('.line-chip').length,
@@ -177,6 +178,7 @@ async function runSmokeTest() {
     if (!report.dialer) problems.push('dialer not rendered');
     if (report.keypadKeys !== 12) problems.push(`expected 12 keypad keys, got ${report.keypadKeys}`);
     if (report.crashed) problems.push(`renderer threw: ${report.bodyText}`);
+    if (!report.mutedClip) problems.push('muted.wav did not load in the renderer (CSP or path)');
 
     // Optional: run real speech through the transcription worker.
     //   TwinLine.exe --smoke --smoke-wav=path\to\16k-mono.wav

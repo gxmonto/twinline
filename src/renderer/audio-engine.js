@@ -407,6 +407,14 @@ export class RendererAudio {
    *   'ended'     — falling two-note blip when a call ends
    *   'busy'      — the familiar busy signal, briefly
    */
+  /** Play a bundled sound file on the speaker device (a local cue; nothing of it reaches the call). */
+  async playClip(url) {
+    const clip = new Audio(url);
+    const outId = this.settings.outputDeviceId || 'default';
+    if (outId !== 'default' && clip.setSinkId) await clip.setSinkId(outId).catch(() => {});
+    await clip.play();
+  }
+
   async playCue(kind) {
     const ctx = await this._ensureRingContext();
     if (ctx.state === 'suspended') await ctx.resume();

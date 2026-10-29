@@ -149,9 +149,13 @@ class AudioEngine extends EventEmitter {
     this.mixer.setLegMode(callId, mode);
   }
 
+  /**
+   * Mute means "my microphone", nothing else: the mixer drops the mic from
+   * every outgoing mix and the parties keep hearing each other. It used to
+   * silence every RTP session as well, which muted the whole conference.
+   */
   setMicMuted(muted) {
     this.mixer.setMicMuted(muted);
-    for (const session of this.sessions.values()) session.setMuted(muted);
   }
 
   setSpeakerGain(gain) {

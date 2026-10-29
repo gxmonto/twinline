@@ -166,6 +166,17 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   still valid; only a real failure changes the chip (it flickered amber before).
 - **Errors**: RTP send errors are reported once per code per 30 s; toasts
   collapse repeats into "×N", max four. Never let a per-frame error toast.
+- **Mute is the microphone only** (1.5.0): `engine.setMicMuted` → `mixer.setMicMuted`
+  and nothing else. It also called `session.setMuted` on every RTP session,
+  which replaced each party's outgoing mix with silence — in a conference the
+  host's mute muted everyone (Mike, 2026-10-28). `RtpSession` has no mute
+  any more; the loopback test "muting the microphone does not silence the
+  other parties" sends real audio through a muted host.
+- **"Muted" cue is a recorded clip** (1.5.0): `audio.playClip('../assets/muted.wav')`
+  (Windows Zira TTS, 16 kHz mono) on the chosen speaker via
+  `HTMLMediaElement.setSinkId`. `speechSynthesis` said nothing in the
+  packaged app (never diagnosed) and could not target the speaker device.
+  The smoke test checks the clip loads under the CSP (`mutedClip`).
 - **Transcription channels**: microphone and each *party* are separate streams
   (`participants(callId)` from the CallManager lists every conference member,
   labelled by contact/name/number), so *You*/*Caller*/per-party labels need

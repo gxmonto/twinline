@@ -110,7 +110,6 @@ class RtpSession extends EventEmitter {
 
     this.sending = true;             // false while held (a=recvonly/inactive)
     this.receiving = true;
-    this.muted = false;
     this.needMarker = true;
 
     this.jitter = new JitterBuffer({ frameSamples });
@@ -172,13 +171,6 @@ class RtpSession extends EventEmitter {
     if (receiving !== undefined && receiving !== this.receiving) {
       this.receiving = receiving;
       if (!receiving) this.jitter.reset();
-    }
-  }
-
-  setMuted(muted) {
-    if (this.muted !== muted) {
-      this.muted = muted;
-      this.needMarker = true;
     }
   }
 
@@ -290,9 +282,7 @@ class RtpSession extends EventEmitter {
 
     if (!this.sending) { this.timestamp = (this.timestamp + this.frameSamples) >>> 0; return; }
 
-    const payload = this.muted || !pcm
-      ? this._silence
-      : this.sendCodec.encode(pcm);
+    const payload = pcm ? this.sendCodec.encode(pcm) : this._silence;
 
     this._emit(this.sendPayloadType, payload, this.needMarker);
     this.needMarker = false;

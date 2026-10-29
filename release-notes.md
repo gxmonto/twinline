@@ -1,1 +1,2 @@
-<!-- Describe what changed in the next release. Shown to users in the update banner. -->
+- Conference: pressing Mute now mutes only your microphone. The other people keep hearing each other; before, it silenced everyone.
+- The optional "muted" voice cue now plays (a recorded voice on your chosen speaker). The old text-to-speech version stayed silent on many PCs.

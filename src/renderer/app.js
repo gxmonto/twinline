@@ -207,7 +207,6 @@ function wireEvents() {
   $('contactForm').addEventListener('submit', saveContact);
   $('contactSearch').addEventListener('input', renderContacts);
   $('historySearch').addEventListener('input', openHistory);
-  if ('speechSynthesis' in window) speechSynthesis.getVoices();   // voices load async; warm the list
   $('btnContactsImport').onclick = importContacts;
   for (const button of document.querySelectorAll('button[data-export]')) {
     button.onclick = () => exportContacts(button.dataset.export);
@@ -644,18 +643,12 @@ async function toggleMute() {
     state.muted = result.muted;
     audio.setMicrophoneEnabled(!result.muted);
     renderAll();
-    // Spoken to the local speaker only: the mic is already off, so nothing of
+    // Played on the local speaker only: the mic is already off, so nothing of
     // it reaches the call. Unmute says nothing — an open mic would pick it up.
-    if (result.muted && settings && settings.behaviour.announceMute && 'speechSynthesis' in window) {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance('muted');
-      // A female voice where the OS has one (Zira/Hazel on Windows, Samantha
-      // on macOS); slightly slower and higher reads less mechanical.
-      const voices = speechSynthesis.getVoices();
-      u.voice = voices.find((v) => /zira|hazel|aria|jenny|samantha|karen|moira|female/i.test(v.name)) || voices.find((v) => /^en/i.test(v.lang)) || null;
-      u.rate = 0.9;
-      u.pitch = 1.15;
-      speechSynthesis.speak(u);
+    // A recorded clip, not speechSynthesis: that said nothing in the packaged
+    // app and could not be sent to the chosen speaker device anyway.
+    if (result.muted && settings && settings.behaviour.announceMute) {
+      audio.playClip('../assets/muted.wav').catch((err) => api.log.note(`muted cue failed: ${err.message}`));
     }
   }
 }

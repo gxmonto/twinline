@@ -560,6 +560,43 @@ test('conference: bridge two calls, then drop only the third party', async (t) =
   assert.ok(first.outgoing.rtp.stats.packetsSent > sentBefore);
 });
 
+test('conference: muting the microphone does not silence the other parties', async (t) => {
+  const env = await makePair(41);
+  t.after(() => env.teardown());
+
+  const manager = new CallManager({ audio: env.audio, maxCalls: 4 });
+  manager.accounts.set('alice', env.alice);
+
+  const first = await connectedPair(env);
+  manager._trackCall(first.outgoing);
+  env.audio.setLegMode(first.outgoing.id, 'active');
+
+  const before = env.incoming.length;
+  const bobOutgoing = await env.bob.dial('alice');
+  const second = await waitFor(
+    () => env.incoming.slice(before).find((c) => c !== bobOutgoing && c.state === 'incoming'),
+    { label: 'second incoming call' });
+  manager._trackCall(second);
+  await manager.answer(second.id);
+  await manager.conference([first.outgoing.id, second.id]);
+
+  assert.deepStrictEqual(manager.setMuted(true), { muted: true });
+
+  // What alice sends to the second party must carry the first party's
+  // audio, mute or not. Mute used to silence every RTP session, so a
+  // muted host muted the whole conference (Mike, 2026-10-28).
+  const sent = [];
+  const emit = second.rtp._emit.bind(second.rtp);
+  second.rtp._emit = (pt, payload, ...rest) => { sent.push(payload); return emit(pt, payload, ...rest); };
+  const tone = Int16Array.from({ length: 160 }, (_, i) => Math.round(8000 * Math.sin(i / 4)));
+  for (let i = 0; i < 10; i++) { first.inbound.rtp.sendFrame(tone); await sleep(20); }
+  await sleep(200);
+
+  assert.ok(sent.length > 5, `alice sent ${sent.length} frames to the second party`);
+  assert.ok(sent.some((p) => p !== second.rtp._silence), 'the second party still hears the first while we are muted');
+  assert.deepStrictEqual(manager.setMuted(false), { muted: false });
+});
+
 test('conference: holding one member keeps the conference; Resume rejoins them', async (t) => {
   const env = await makePair(52);
   t.after(() => env.teardown());
