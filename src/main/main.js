@@ -75,14 +75,14 @@ if (isSmoke) app.setPath('userData', path.join(app.getPath('temp'), 'twinline-sm
 const userDataArg = process.argv.find((a) => a.startsWith('--user-data='));
 if (userDataArg && !isSmoke) app.setPath('userData', path.resolve(userDataArg.slice('--user-data='.length)));
 
-// A second launch (or a sip:/tel: link) focuses the running instance.
+// A second launch (or a sip:/tel:/callto: link) focuses the running instance.
 if (!app.requestSingleInstanceLock()) {
   if (isSmoke) console.error('SMOKE FAILED: another smoke instance holds the lock');
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
     focusWindow();
-    const link = argv.find((a) => /^(sip|sips|tel):/i.test(a));
+    const link = argv.find((a) => /^(sip|sips|tel|callto):/i.test(a));
     if (link) handleDialLink(link);
   });
 }
@@ -731,12 +731,13 @@ function updatePowerBlocker() {
 }
 
 /**
- * A sip:/tel: link from a browser or another program fills in the dialler and
+ * A sip:/tel:/callto: link from a browser or another program fills in the dialler and
  * brings the window up; it never dials by itself. Otherwise any web page could
  * make the phone call a premium number.
  */
 function handleDialLink(link) {
-  const target = String(link).replace(/^tel:/i, '').replace(/[\r\n\s]/g, '').slice(0, 256);
+  // callto: (and the Skype-era callto:// form) is what web platforms emit most.
+  const target = String(link).replace(/^(tel|callto):\/*/i, '').replace(/[\r\n\s]/g, '').slice(0, 256);
   if (!target) return;
   focusWindow();
   send('dial:prefill', { target });
@@ -1092,6 +1093,7 @@ app.whenReady().then(async () => {
 
   app.setAsDefaultProtocolClient('sip');
   app.setAsDefaultProtocolClient('tel');
+  app.setAsDefaultProtocolClient('callto');
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

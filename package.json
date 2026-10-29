@@ -102,7 +102,7 @@
           "Comment": "Dual-line SIP softphone",
           "Categories": "Network;Telephony;",
           "Keywords": "sip;voip;softphone;telephone;pbx;",
-          "MimeType": "x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;"
+          "MimeType": "x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;x-scheme-handler/callto;"
         }
       }
     },
