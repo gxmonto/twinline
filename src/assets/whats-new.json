@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "date": "2026-10-29",
-  "notes": "- Conference: pressing Mute now mutes only your microphone. The other people keep hearing each other; before, it silenced everyone.\n- The optional \"muted\" voice cue now plays (a recorded voice on your chosen speaker). The old text-to-speech version stayed silent on many PCs."
+  "version": "1.5.1",
+  "date": "2026-10-30",
+  "notes": "- `callto:` links now open TwinLine and fill in the number, like `sip:` and `tel:` links (Windows and Linux). The number is prefilled; press Call to dial.\n- Audio no longer goes silent when the other side resumes a hold or the PBX reconnects the call to a conference. The incoming audio stream restarted with new sequence numbers and TwinLine dropped every packet as \"late\" until the numbers caught up — minutes of silence that only a transfer fixed."
 }
