@@ -304,3 +304,32 @@ test('mixer tolerates a leg with no audio yet', () => {
   assert.strictEqual(a.lastSent(), 50 + 300);
   assert.strictEqual(b.lastSent(), 50);
 });
+
+// ---- stream restarts (PBX re-anchoring media mid-call) --------------------
+
+test('jitter buffer restarts on a stream whose sequence jumps far behind', () => {
+  const jb = new JitterBuffer({ frameSamples: 160, targetFrames: 2 });
+  for (let s = 40000; s < 40010; s++) jb.push(s, frame(1));
+  for (let i = 0; i < 10; i++) jb.pull();
+  // New bridge leg, same SSRC, sequence restarts 20000 behind: before, every
+  // packet was "late" for the next 400 s.
+  for (let s = 20000; s < 20015; s++) jb.push(s, frame(7));   // enough to refill the adapted target
+  const out = jb.pull();
+  assert.ok(out && out[0] === 7, 'frames from the restarted stream play');
+  assert.strictEqual(jb.stats.late, 0);
+});
+
+test('RTP session resets its jitter buffer when the remote SSRC changes', () => {
+  const { RtpSession } = require('../src/main/rtp/session');
+  const s = new RtpSession({ symmetric: false });
+  const { PCMU } = codecs.CODECS;
+  s.configure({ remoteAddress: '10.0.0.1', remotePort: 4000, sendCodec: PCMU, sendPayloadType: 0, receiveMap: { 0: PCMU } });
+  const rinfo = { address: '10.0.0.1', port: 4000 };
+  const payload = PCMU.encode(frame(1000));
+  for (let seq = 40000; seq < 40010; seq++) s._onPacket(buildPacket({ payloadType: 0, sequence: seq, timestamp: seq * 160, ssrc: 1, payload }), rinfo);
+  for (let i = 0; i < 10; i++) s.pullFrame();
+  for (let seq = 20000; seq < 20015; seq++) s._onPacket(buildPacket({ payloadType: 0, sequence: seq, timestamp: seq * 160, ssrc: 2, payload }), rinfo);
+  assert.strictEqual(s.stats.ssrcChanges, 1);
+  const out = s.pullFrame();
+  assert.ok(out && Math.abs(out[0] - 1000) < 40, 'audio from the new stream plays');
+});

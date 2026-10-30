@@ -8,6 +8,7 @@
  */
 
 const MAX_SEQ = 0x10000;
+const RESTART_FRAMES = 500;   // 10 s at 20 ms: further behind than any network reorders
 
 /** Signed distance from `a` to `b` across the 16-bit sequence space. */
 function seqDelta(a, b) {
@@ -70,7 +71,14 @@ class JitterBuffer {
    * @param {Int16Array} pcm
    */
   push(seq, pcm) {
-    const ext = this._extend(seq);
+    let ext = this._extend(seq);
+    // Seconds behind the playout point is not jitter, it is a stream that
+    // restarted its sequence (same SSRC). Start over instead of dropping
+    // every packet as late until the numbers catch up — minutes of silence.
+    if (this.playoutExt !== null && this.playoutExt - ext > RESTART_FRAMES) {
+      this.reset();
+      ext = this._extend(seq);
+    }
     this.stats.received++;
 
     if (this.playoutExt !== null && ext < this.playoutExt) {
@@ -130,8 +138,9 @@ class JitterBuffer {
       // we re-establish a healthy delay when audio resumes.
       this.concealCount++;
       if (this.concealCount > this.max) {
-        this.prebuffering = true;
-        this.lastFrame = null;
+        // Full reset, not just prebuffering: the stream that resumes after a
+        // stall (hold, bridge change) may carry any sequence number.
+        this.reset();
         return null;
       }
       this.stats.concealed++;

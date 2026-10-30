@@ -113,7 +113,7 @@ class RtpSession extends EventEmitter {
     this.needMarker = true;
 
     this.jitter = new JitterBuffer({ frameSamples });
-    this.stats = { packetsSent: 0, packetsReceived: 0, bytesSent: 0, bytesReceived: 0, unknownPt: 0 };
+    this.stats = { packetsSent: 0, packetsReceived: 0, bytesSent: 0, bytesReceived: 0, unknownPt: 0, ssrcChanges: 0 };
 
     this._dtmf = null;
     this._silence = this.sendCodec.silence(frameSamples);
@@ -190,6 +190,15 @@ class RtpSession extends EventEmitter {
 
     this.stats.packetsReceived++;
     this.stats.bytesReceived += buf.length;
+
+    // A PBX that re-anchors media (hold/resume by the other party, bridge
+    // change) starts a new stream: new SSRC, new random sequence. Keyed on
+    // the old sequence, the jitter buffer called every packet "late" and the
+    // user heard nothing for minutes (Mike, 2026-10-30, hosted conference).
+    if (packet.ssrc !== this.remoteSsrc) {
+      if (this.remoteSsrc !== undefined) { this.jitter.reset(); this.stats.ssrcChanges++; }
+      this.remoteSsrc = packet.ssrc;
+    }
 
     if (packet.payloadType === PT_COMFORT_NOISE) return;
 

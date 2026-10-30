@@ -167,6 +167,17 @@ broadcasts to all windows; only the speaker stream goes to the main window.
   still valid; only a real failure changes the chip (it flickered amber before).
 - **Errors**: RTP send errors are reported once per code per 30 s; toasts
   collapse repeats into "×N", max four. Never let a per-frame error toast.
+- **Inbound stream restarts reset the jitter buffer** (1.5.1): the RTP
+  session tracks the remote SSRC and resets the jitter buffer when it
+  changes; the buffer also restarts itself when a packet lands more than
+  `RESTART_FRAMES` (10 s) behind the playout point or after a stall. Mike's
+  hosted conference (2026-10-30, 1.5.0): the other party held and resumed,
+  the PBX sent two sendrecv re-INVITEs with the same address, and the new
+  bridge leg came with a new SSRC and a lower sequence — every packet was
+  "late" for 282 s (transcript counters: 14015 empty party frames, no
+  `dropped RTP` warning), until a transfer out and back made a new call.
+  `rtp stats` is now logged at every call end (packets, late/lost,
+  ssrcChanges) — ask for it with the `sdp` lines.
 - **Mute is the microphone only** (1.5.0): `engine.setMicMuted` → `mixer.setMicMuted`
   and nothing else. It also called `session.setMuted` on every RTP session,
   which replaced each party's outgoing mix with silence — in a conference the

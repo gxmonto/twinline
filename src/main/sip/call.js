@@ -1052,6 +1052,9 @@ class Call extends EventEmitter {
     if (this.inviteTxn) this.inviteTxn.removeAllListeners();
 
     this._setState('terminated');
+    // Receive-side evidence for "I could not hear them": packets, late/lost
+    // frames, source changes. Ask for this line with the sdp lines.
+    if (this.rtp) this.ua.log.info('rtp stats', { call: this.id.slice(0, 8), ...this.rtp.stats, jitter: this.rtp.jitter.stats });
     this.ua.audio.releaseLeg(this.id);
     this.rtp = null;
     this.ua.unregisterDialog(this);
